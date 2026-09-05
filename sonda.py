@@ -84,15 +84,19 @@ def prova(nome: str, url: str) -> dict:
 # Understat e FBref bloccano gli indirizzi dei datacenter: da GitHub non si
 # raggiungono. Proviamo a passare da un estrattore di testo pubblico, che fa
 # la richiesta al posto nostro, e da fonti italiane che invece rispondono.
-JINA = "https://r.jina.ai/"
+# Understat e FBref bloccano gli indirizzi dei datacenter. Proviamo diversi
+# ponti pubblici: fanno loro la richiesta e ci girano il contenuto.
+U = "https://understat.com/league/Serie_A/2026"
+F = "https://fbref.com/en/comps/11/stats/Serie-A-Stats"
+import urllib.parse as _u
 STAT_FONTI = {
-    "understat diretto": "https://understat.com/league/Serie_A/2026",
-    "understat proxy":   JINA + "https://understat.com/league/Serie_A/2026",
-    "fbref diretto":     "https://fbref.com/en/comps/11/stats/Serie-A-Stats",
-    "fbref proxy":       JINA + "https://fbref.com/en/comps/11/stats/Serie-A-Stats",
-    "fbref proxy tiri":  JINA + "https://fbref.com/en/comps/11/shooting/Serie-A-Stats",
-    "fantacalcio stats": "https://www.fantacalcio.it/statistiche-serie-a",
-    "fanta.soccer stats": "https://www.fanta.soccer/it/statistiche/",
+    "understat diretto":  U,
+    "understat allorigins": "https://api.allorigins.win/raw?url=" + _u.quote(U, safe=""),
+    "understat codetabs":   "https://api.codetabs.com/v1/proxy?quest=" + _u.quote(U, safe=""),
+    "understat corsproxy":  "https://corsproxy.io/?" + _u.quote(U, safe=""),
+    "fbref allorigins":     "https://api.allorigins.win/raw?url=" + _u.quote(F, safe=""),
+    "fbref codetabs":       "https://api.codetabs.com/v1/proxy?quest=" + _u.quote(F, safe=""),
+    "fotmob squadre":       "https://www.fotmob.com/api/leagues?id=55&ccode3=ITA",
 }
 
 
@@ -109,7 +113,7 @@ def prova_stat():
         soup = BeautifulSoup(h, "html.parser")
         n_tab = len(soup.find_all("table"))
         commenti = h.count("<!--")
-        ha_json = bool(re.search(r"playersData\s*=", h))
+        ha_json = bool(re.search(r"playersData\s*=|\"xG\"|expected_goals", h))
         testo = BeautifulSoup(h, "html.parser").get_text(" ", strip=True)
         n_xg = len(re.findall(r"\b\d\.\d{1,2}\b", testo))
         ha_xg = "xg" in h.lower()
