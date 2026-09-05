@@ -258,6 +258,14 @@ def diagnosi():
         trovati = sum(1 for _, n, c, _, _ in rosa.GIOCATORI if probabili.cerca(pr, n, c))
         esiti.append(("Probabili", f"{len(pieni)} squadre, {trovati}/25 tuoi giocatori "
                                    f"agganciati", trovati < 15))
+        if trovati < 25:
+            print("\n--- cosa ha letto dalla pagina delle probabili ---")
+            for riga in probabili.elenco(pr)[:8]:
+                print("   ", riga[:150])
+            mancanti = [n for _, n, c, _, _ in rosa.GIOCATORI
+                        if not probabili.cerca(pr, n, c)]
+            print("    non agganciati:", ", ".join(mancanti) or "nessuno")
+            print("--- fine ---")
     except Exception as e:
         esiti.append(("Probabili", f"ERRORE {type(e).__name__}: {e}", True))
 
