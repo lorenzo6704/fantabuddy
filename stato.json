@@ -1,1 +1,22 @@
-{"offset": 0, "giornata": null, "correzioni": {}, "inviate": [], "ultimo_undici": [], "chiuso": false}
+{
+ "offset": 0,
+ "giornata": 3,
+ "correzioni": {},
+ "inviate": [
+  3
+ ],
+ "ultimo_undici": [
+  "Bartesaghi",
+  "Colombo",
+  "Davis",
+  "De Bruyne",
+  "De Gea",
+  "Dovbyk",
+  "Mancini",
+  "Pessina",
+  "Pulisic",
+  "Rrahmani",
+  "Zaniolo"
+ ],
+ "chiuso": true
+}
