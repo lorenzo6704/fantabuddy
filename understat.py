@@ -14,11 +14,21 @@ BASE = "https://understat.com/league/Serie_A/{stagione}"
 UA = {"User-Agent": "Mozilla/5.0 (fantabot; contatto: uso personale)"}
 
 
-def _estrai(html: str, var: str) -> list[dict]:
-    m = re.search(var + r"\s*=\s*JSON\.parse\('(.*?)'\)", html, re.S)
-    if not m:
-        raise RuntimeError(f"variabile {var} non trovata: understat ha cambiato pagina")
-    return json.loads(codecs.decode(m.group(1), "unicode_escape"))
+def _estrai(html: str, var: str):
+    """Understat cambia spesso il modo di incorporare i dati: proviamo le
+    varianti note invece di dare per scontata una sola forma."""
+    tentativi = [
+        var + r"\s*=\s*JSON\.parse\('(.*?)'\)",
+        var + r"\s*=\s*JSON\.parse\(\"(.*?)\"\)",
+    ]
+    for pat in tentativi:
+        m = re.search(pat, html, re.S)
+        if m:
+            return json.loads(codecs.decode(m.group(1), "unicode_escape"))
+    m = re.search(var + r"\s*=\s*(\[.*?\]|\{.*?\})\s*;", html, re.S)
+    if m:
+        return json.loads(m.group(1))
+    raise RuntimeError(f"variabile {var} non trovata")
 
 
 def stagione_corrente(oggi: dt.date | None = None) -> int:
@@ -26,12 +36,23 @@ def stagione_corrente(oggi: dt.date | None = None) -> int:
     return oggi.year if oggi.month >= 7 else oggi.year - 1
 
 
+def _pagina(stagione: int | None, timeout: int, var: str):
+    """Prova la stagione corrente e, se la pagina non ha dati, quella prima:
+    a inizio stagione understat a volte non ha ancora pubblicato il campionato."""
+    errori = []
+    for st in ([stagione] if stagione else [stagione_corrente(), stagione_corrente() - 1]):
+        try:
+            r = requests.get(BASE.format(stagione=st), headers=UA, timeout=timeout)
+            r.raise_for_status()
+            return _estrai(r.text, var)
+        except Exception as e:
+            errori.append(f"{st}: {e}")
+    raise RuntimeError("understat non leggibile — " + "; ".join(errori))
+
+
 def scarica(stagione: int | None = None, timeout: int = 20) -> dict[str, dict]:
     """Ritorna {nome_understat: statistiche} con le medie per 90 minuti."""
-    stagione = stagione or stagione_corrente()
-    r = requests.get(BASE.format(stagione=stagione), headers=UA, timeout=timeout)
-    r.raise_for_status()
-    grezzi = _estrai(r.text, "playersData")
+    grezzi = _pagina(stagione, timeout, "playersData")
 
     out = {}
     for p in grezzi:
@@ -59,10 +80,7 @@ def scarica(stagione: int | None = None, timeout: int = 20) -> dict[str, dict]:
 
 def squadre(stagione: int | None = None, timeout: int = 20) -> dict[str, dict]:
     """Dati aggregati per club: xG fatti e subiti per partita (forza avversario)."""
-    stagione = stagione or stagione_corrente()
-    r = requests.get(BASE.format(stagione=stagione), headers=UA, timeout=timeout)
-    r.raise_for_status()
-    grezzi = _estrai(r.text, "teamsData")
+    grezzi = _pagina(stagione, timeout, "teamsData")
     out = {}
     for t in grezzi.values():
         gare = t["history"]
