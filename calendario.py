@@ -33,17 +33,23 @@ def partite(timeout: int = 20) -> list[dict]:
 
 
 def prossima_giornata(adesso: dt.datetime | None = None):
-    """Ritorna (numero_giornata, primo_kickoff, [partite]) della prima giornata
-    non ancora iniziata."""
+    """(numero_giornata, kickoff_di_apertura, [tutte le partite del turno]).
+
+    La giornata e' la prima con almeno un match ancora da giocare, ma il turno
+    che restituiamo contiene TUTTE le sue partite, comprese quelle gia'
+    disputate: serve perche' la formazione al fantacalcio si blocca al primo
+    fischio del turno, non al prossimo match rimasto.
+    """
     adesso = adesso or dt.datetime.now(dt.timezone.utc)
-    future = [p for p in partite() if p["inizio"] > adesso and p["stato"] in
-              ("SCHEDULED", "TIMED")]
+    tutte = partite()
+    future = [p for p in tutte if p["inizio"] > adesso
+              and p["stato"] in ("SCHEDULED", "TIMED")]
     if not future:
         return None
     g = min(p["giornata"] for p in future)
-    del_turno = sorted([p for p in future if p["giornata"] == g],
-                       key=lambda p: p["inizio"])
-    return g, del_turno[0]["inizio"], del_turno
+    turno = sorted([p for p in tutte if p["giornata"] == g],
+                   key=lambda p: p["inizio"])
+    return g, turno[0]["inizio"], turno
 
 
 def avversario(club: str, turno: list[dict]) -> tuple[str, bool] | None:
