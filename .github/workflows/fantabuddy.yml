@@ -2,36 +2,40 @@ name: FantaBuddy
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # ogni 30 minuti: decide da solo se e' il momento
-  workflow_dispatch:          # bottone "Run workflow" per provarlo a mano
+    # Ogni 10 minuti: lo script decide da solo se e' il momento di scrivere.
+    # Se rendi il repository privato, portalo a "*/30".
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
 
 permissions:
-  contents: write             # serve per ricordarsi cosa ha gia' mandato
+  contents: write
 
 jobs:
   gira:
     runs-on: ubuntu-latest
+    env:
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
       - run: pip install -r requirements.txt
 
+      # Dice subito quale pezzo non risponde, senza far fallire il resto
+      - name: diagnosi
+        continue-on-error: true
+        run: python bot.py --diagnosi
+
       - name: messaggio delle sei ore prima
         run: python bot.py --pre
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
 
       - name: correzioni dalle formazioni ufficiali
         run: python bot.py --ufficiali
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
 
       - name: salva cosa ha gia' mandato
+        if: always()
         run: |
           git config user.name  "fantabuddy"
           git config user.email "bot@users.noreply.github.com"
