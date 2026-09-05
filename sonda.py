@@ -77,14 +77,22 @@ def prova(nome: str, url: str) -> dict:
 
     return {"fonte": nome, "byte": len(r.text), "tabelle": len(soup.find_all("table")),
             "percentuali": len(re.findall(r"\d{1,3}\s*%", testo)),
-            "trovati": trovati, "classificati": classificati, "esempi": dettaglio}
+            "trovati": trovati, "classificati": classificati, "esempi": dettaglio,
+            "testo": testo}
 
 
+# Understat e FBref bloccano gli indirizzi dei datacenter: da GitHub non si
+# raggiungono. Proviamo a passare da un estrattore di testo pubblico, che fa
+# la richiesta al posto nostro, e da fonti italiane che invece rispondono.
+JINA = "https://r.jina.ai/"
 STAT_FONTI = {
-    "understat 2026": "https://understat.com/league/Serie_A/2026",
-    "understat 2025": "https://understat.com/league/Serie_A/2025",
-    "fbref standard": "https://fbref.com/en/comps/11/stats/Serie-A-Stats",
-    "fbref shooting": "https://fbref.com/en/comps/11/shooting/Serie-A-Stats",
+    "understat diretto": "https://understat.com/league/Serie_A/2026",
+    "understat proxy":   JINA + "https://understat.com/league/Serie_A/2026",
+    "fbref diretto":     "https://fbref.com/en/comps/11/stats/Serie-A-Stats",
+    "fbref proxy":       JINA + "https://fbref.com/en/comps/11/stats/Serie-A-Stats",
+    "fbref proxy tiri":  JINA + "https://fbref.com/en/comps/11/shooting/Serie-A-Stats",
+    "fantacalcio stats": "https://www.fantacalcio.it/statistiche-serie-a",
+    "fanta.soccer stats": "https://www.fanta.soccer/it/statistiche/",
 }
 
 
@@ -102,10 +110,17 @@ def prova_stat():
         n_tab = len(soup.find_all("table"))
         commenti = h.count("<!--")
         ha_json = bool(re.search(r"playersData\s*=", h))
+        testo = BeautifulSoup(h, "html.parser").get_text(" ", strip=True)
+        n_xg = len(re.findall(r"\b\d\.\d{1,2}\b", testo))
         ha_xg = "xg" in h.lower()
-        print(f"  [{'ok' if (ha_json or n_tab or commenti) and ha_xg else '--'}] "
-              f"{nome:<16} {len(h)//1024:>4} KB · {n_tab:>2} tabelle · "
-              f"{commenti:>3} commenti · playersData={ha_json} · contiene 'xg'={ha_xg}")
+        buono = (ha_json or n_tab > 3) and len(h) > 60000
+        print(f"  [{'ok' if buono else '--'}] {nome:<19} {len(h)//1024:>5} KB · "
+              f"{n_tab:>3} tab · {commenti:>3} comm · playersData={str(ha_json):<5} · "
+              f"'xg'={str(ha_xg):<5} · {n_xg} numeri decimali")
+        if buono and ha_xg:
+            i = testo.lower().find("de bruyne")
+            if i > 0:
+                print(f"       intorno a De Bruyne: ...{testo[max(0,i-90):i+160]}...")
     print("=== fine statistiche ===\n")
 
 
@@ -124,6 +139,18 @@ def main():
               f"{d['classificati']}/25 classificati")
         if d["esempi"]:
             print(f"       esempi: {', '.join(d['esempi'])}")
+    # Mostra com'e' scritta davvero una riga, per costruire il parser esatto
+    for d in righe[:2]:
+        if "errore" in d or not d.get("classificati"):
+            continue
+        print(f"\n  --- estratti da {d['fonte']} ---")
+        for campione in ("Bartesaghi", "De Bruyne", "Dovbyk"):
+            t = d.get("testo", "")
+            i = t.lower().find(campione.lower())
+            if i > 0:
+                print(f"    [{campione}] ...{t[max(0,i-160):i+200]}...")
+        print("  --- fine estratti ---")
+
     vincitrice = righe[0]
     print("=== migliore: " + (vincitrice["fonte"] if vincitrice.get("classificati", 0)
                               else "nessuna, servono altre candidate") + " ===\n")
