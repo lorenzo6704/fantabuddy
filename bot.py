@@ -267,7 +267,7 @@ def diagnosi():
                 print(f"\n--- com'e' fatta la pagina: {i['byte']} byte, "
                       f"{i['tabelle']} tabelle, {i['percentuali']} percentuali, "
                       f"{i['righe_riconosciute']} righe riconosciute a testo")
-                print("    inizio pagina:", i["assaggio"][:200])
+                print("    inizio pagina:", i["assaggio"][:160])
             except Exception as e:
                 print("    ispezione fallita:", e)
             print("--- cosa ha letto dalla pagina delle probabili ---")
