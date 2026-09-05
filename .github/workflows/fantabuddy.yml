@@ -28,8 +28,12 @@ jobs:
         continue-on-error: true
         run: python bot.py --diagnosi
 
-      - name: prova a mandare adesso
-        run: python bot.py --ora
+      # Prova le fonti alternative di probabili formazioni.
+      # Lancialo a mano da Actions quando serve; poi puoi cancellare il blocco.
+      - name: sonda fonti
+        continue-on-error: true
+        if: github.event_name == 'workflow_dispatch'
+        run: python sonda.py
 
       - name: messaggio delle sei ore prima
         run: python bot.py --pre
