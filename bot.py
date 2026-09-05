@@ -49,9 +49,18 @@ def calcola(correzioni: dict | None = None):
         return None
     g_num, kickoff, turno = turno_info
 
-    stats = understat.scarica()
-    club_stats = understat.squadre()
-    prob_dati = probabili.scarica()
+    guasti = []
+    try:
+        stats = understat.scarica()
+        club_stats = understat.squadre()
+    except Exception as e:
+        stats, club_stats = {}, {}
+        guasti.append(f"statistiche Understat non raggiungibili ({type(e).__name__})")
+    try:
+        prob_dati = probabili.scarica()
+    except Exception as e:
+        prob_dati = {}
+        guasti.append(f"probabili formazioni non raggiungibili ({type(e).__name__})")
 
     valutati, avvisi = [], []
     for g in rosa.GIOCATORI:
@@ -84,7 +93,7 @@ def calcola(correzioni: dict | None = None):
 
     return {"giornata": g_num, "kickoff": kickoff, "turno": turno,
             "scelta": formazione.scegli(valutati), "avvisi": avvisi,
-            "prob_dati": prob_dati}
+            "prob_dati": prob_dati, "guasti": guasti}
 
 
 def undici_nomi(scelta) -> list[str]:
@@ -106,6 +115,10 @@ def messaggio_completo(r) -> str:
         out += [f"<b>{v['g'][1]}</b> ({v['g'][0]}, {v['g'][2]}) — {v['val']:.2f}",
                 f"  {formazione.motivazione(v, False)}",
                 f"  {formazione.perche_fuori(v, s['undici'])}"]
+    if r["guasti"]:
+        out += ["", "🔧 " + "; ".join(r["guasti"]) +
+                ". La formazione qui sopra e' stata calcolata lo stesso, ma con "
+                "stime prudenziali: controllala prima di schierarla."]
     if r["avvisi"]:
         out += ["", "⚠️ Non trovati nelle probabili, valutati in modo prudenziale: "
                 + ", ".join(r["avvisi"])]
@@ -210,11 +223,59 @@ def modo_ufficiali(st):
     print("correzione inviata per:", ", ".join(pronti))
 
 
+def diagnosi():
+    """Controlla i pezzi uno per uno e stampa cosa funziona e cosa no."""
+    esiti = []
+
+    for v in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID", "FOOTBALL_DATA_TOKEN"):
+        esiti.append((v, "presente" if os.environ.get(v) else "MANCANTE", not os.environ.get(v)))
+
+    try:
+        tok = os.environ["TELEGRAM_TOKEN"]
+        j = requests.get(f"https://api.telegram.org/bot{tok}/getMe", timeout=15).json()
+        ok = j.get("ok")
+        esiti.append(("Telegram", f"bot @{j['result']['username']}" if ok
+                      else f"RIFIUTATO: {j.get('description')}", not ok))
+    except Exception as e:
+        esiti.append(("Telegram", f"ERRORE {type(e).__name__}: {e}", True))
+
+    try:
+        g, k, turno = calendario.prossima_giornata()
+        esiti.append(("Calendario", f"giornata {g}, primo match {k:%d/%m %H:%M} UTC, "
+                                    f"{len(turno)} partite", False))
+    except Exception as e:
+        esiti.append(("Calendario", f"ERRORE {type(e).__name__}: {e}", True))
+
+    try:
+        st = understat.scarica()
+        esiti.append(("Understat", f"{len(st)} giocatori con statistiche", False))
+    except Exception as e:
+        esiti.append(("Understat", f"ERRORE {type(e).__name__}: {e}", True))
+
+    try:
+        pr = probabili.scarica()
+        pieni = [k for k, v in pr.items() if v["giocatori"]]
+        trovati = sum(1 for _, n, c, _, _ in rosa.GIOCATORI if probabili.cerca(pr, n, c))
+        esiti.append(("Probabili", f"{len(pieni)} squadre, {trovati}/25 tuoi giocatori "
+                                   f"agganciati", trovati < 15))
+    except Exception as e:
+        esiti.append(("Probabili", f"ERRORE {type(e).__name__}: {e}", True))
+
+    print("\n=== DIAGNOSI FANTABUDDY ===")
+    for nome, msg, male in esiti:
+        print(f"  [{'KO' if male else 'ok'}] {nome}: {msg}")
+    rotti = [n for n, _, m in esiti if m]
+    print("=== " + ("tutto a posto" if not rotti else "da sistemare: " + ", ".join(rotti)) + " ===\n")
+    return 1 if any(m for _, _, m in esiti[:4]) else 0
+
+
 def main():
     ap = argparse.ArgumentParser()
-    for f in ("pre", "ufficiali", "prova", "ora"):
+    for f in ("pre", "ufficiali", "prova", "ora", "diagnosi"):
         ap.add_argument("--" + f, action="store_true")
     a = ap.parse_args()
+    if a.diagnosi:
+        return diagnosi()
     st = stato.leggi()
 
     if a.prova:
@@ -233,4 +294,13 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyError as e:
+        print(f"\nMANCA UN SECRET: {e}. Controlla Settings > Secrets and "
+              f"variables > Actions, i nomi devono essere esatti.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\nERRORE: {type(e).__name__}: {e}")
+        print("Lancia il passaggio 'diagnosi' per vedere quale pezzo non risponde.")
+        sys.exit(1)
