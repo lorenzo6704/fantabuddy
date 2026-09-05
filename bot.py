@@ -259,7 +259,15 @@ def diagnosi():
         esiti.append(("Probabili", f"{len(pieni)} squadre, {trovati}/25 tuoi giocatori "
                                    f"agganciati", trovati < 15))
         if trovati < 25:
-            print("\n--- cosa ha letto dalla pagina delle probabili ---")
+            try:
+                i = probabili.ispeziona()
+                print(f"\n--- com'e' fatta la pagina: {i['byte']} byte, "
+                      f"{i['tabelle']} tabelle, {i['percentuali']} percentuali, "
+                      f"{i['righe_riconosciute']} righe riconosciute a testo")
+                print("    inizio pagina:", i["assaggio"][:200])
+            except Exception as e:
+                print("    ispezione fallita:", e)
+            print("--- cosa ha letto dalla pagina delle probabili ---")
             for riga in probabili.elenco(pr)[:8]:
                 print("   ", riga[:150])
             mancanti = [n for _, n, c, _, _ in rosa.GIOCATORI
