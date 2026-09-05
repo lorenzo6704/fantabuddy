@@ -28,6 +28,9 @@ jobs:
         continue-on-error: true
         run: python bot.py --diagnosi
 
+      - name: prova a mandare adesso
+        run: python bot.py --ora
+
       - name: messaggio delle sei ore prima
         run: python bot.py --pre
 
