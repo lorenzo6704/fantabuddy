@@ -40,10 +40,11 @@ def scarica(timeout: int = 25) -> dict:
     club = None
     stato_corrente = "titolare"
 
-    for nodo in soup.find_all(["h2", "h3", "table", "ul", "p", "em", "i"]):
+    for nodo in soup.find_all(["h1", "h2", "h3", "h4", "table", "ul", "p", "em", "i",
+                               "strong", "b", "div", "section"]):
         testo = nodo.get_text(" ", strip=True)
 
-        if nodo.name == "h2" and 2 < len(testo) < 30:
+        if nodo.name in ("h1", "h2", "h3", "h4") and 2 < len(testo) < 40:
             club = norm(testo)
             squadre.setdefault(club, {"giocatori": [], "clean_sheet": None})
             continue
@@ -102,19 +103,38 @@ def scarica(timeout: int = 25) -> dict:
     return squadre
 
 
+ORDINE = {"indisponibile": 0, "titolare": 1, "panchina": 2}
+
+
+def _fra(righe, chiave):
+    cand = [g for g in righe if g["nome"].startswith(chiave)]
+    if not cand:
+        cand = [g for g in righe if chiave in g["nome"] or g["nome"] in chiave]
+    return sorted(cand, key=lambda g: ORDINE.get(g["stato"], 3))[0] if cand else None
+
+
 def cerca(dati: dict, cognome: str, club: str):
-    """Trova un giocatore dentro la sezione del suo club. None se assente."""
-    sez = dati.get(norm(club))
-    if not sez:
-        return None
+    """Cerca prima dentro la sezione del club; se non la trova (impaginazione
+    cambiata, nome della squadra scritto diversamente) ripiega su una ricerca
+    globale. Cosi' un cognome raro si aggancia comunque."""
     chiave = norm(cognome)
-    cand = [g for g in sez["giocatori"] if g["nome"].startswith(chiave)]
-    if not cand:
-        cand = [g for g in sez["giocatori"] if chiave in g["nome"]]
-    if not cand:
-        return None
-    ordine = {"indisponibile": 0, "titolare": 1, "panchina": 2}
-    return sorted(cand, key=lambda g: ordine.get(g["stato"], 3))[0]
+    sez = dati.get(norm(club))
+    if sez:
+        g = _fra(sez["giocatori"], chiave)
+        if g:
+            return g
+    tutte = [g for s in dati.values() for g in s["giocatori"]]
+    return _fra(tutte, chiave)
+
+
+def elenco(dati: dict) -> list[str]:
+    """Serve alla diagnosi: mostra cosa ha letto davvero dalla pagina."""
+    out = []
+    for club, s in sorted(dati.items()):
+        if s["giocatori"]:
+            nomi = ", ".join(g["grezzo"] for g in s["giocatori"][:6])
+            out.append(f"{club} ({len(s['giocatori'])}): {nomi}")
+    return out
 
 
 def formazione_ufficiale(dati: dict, club: str) -> bool:
