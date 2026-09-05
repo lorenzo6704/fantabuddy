@@ -1,0 +1,40 @@
+name: FantaBuddy
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # ogni 30 minuti: decide da solo se e' il momento
+  workflow_dispatch:          # bottone "Run workflow" per provarlo a mano
+
+permissions:
+  contents: write             # serve per ricordarsi cosa ha gia' mandato
+
+jobs:
+  gira:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+
+      - name: messaggio delle sei ore prima
+        run: python bot.py --pre
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+
+      - name: correzioni dalle formazioni ufficiali
+        run: python bot.py --ufficiali
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+
+      - name: salva cosa ha gia' mandato
+        run: |
+          git config user.name  "fantabuddy"
+          git config user.email "bot@users.noreply.github.com"
+          git add stato.json || true
+          git diff --staged --quiet || git commit -m "stato $(date -u +%F_%H:%M)"
+          git push || true
