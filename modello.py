@@ -12,7 +12,7 @@ ordinate il non-voto viene rimpiazzato dalla panchina, quindi il valore di un
 titolare incerto e' gia' scontato dalla probabilita'.
 """
 from __future__ import annotations
-import rosa
+import rosa, statistiche
 
 VOTO_BASE = {"P": 6.0, "D": 6.0, "C": 6.0, "A": 6.0}
 MINUTI_ATTESI = 78.0            # minuti medi di un titolare
@@ -32,7 +32,7 @@ def _fattore_avversario(xg_subiti_avv: float | None) -> float:
 def fantavoto_atteso(g, stats, prob_tit, xg_subiti_avv, in_casa, p_clean_sheet=None):
     """g = tupla (ruolo, nome, club, understat, rig). Ritorna (valore, dettagli)."""
     ruolo, nome, club, uname, rig = g
-    s = stats.get(uname)
+    s = statistiche.trova(stats, uname, nome)
     d = {"stat": bool(s), "fonte_stat": "understat" if s else "assente"}
 
     quota_min = MINUTI_ATTESI / 90.0
