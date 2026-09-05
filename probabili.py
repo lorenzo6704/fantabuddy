@@ -30,6 +30,44 @@ def _pct(cella: str):
     return int(m.group(1)) / 100 if m else None
 
 
+# Righe tipo:  "P BIJLOWJ 90% 90% 95% – 91%"  oppure  "A DAVIS K 90% 90% 91%"
+RIGA = re.compile(
+    r"\b([PDCA])\s+([A-Z\u00c0-\u00dc][A-Za-z\u00c0-\u00ff'\u2019\-\. ]{1,28}?)\s+"
+    r"((?:\d{1,3}\s*%|[\u2013\u2014-])\s+){1,4}(\d{1,3})\s*%")
+
+
+def _da_testo(testo: str) -> list[dict]:
+    """Lettore di riserva: cerca le righe direttamente nel testo della pagina,
+    senza dipendere da come sono impaginate le tabelle."""
+    fuori = []
+    for m in RIGA.finditer(testo):
+        nome = m.group(2)
+        valori = [int(x) / 100 for x in re.findall(r"(\d{1,3})\s*%", m.group(0))]
+        media = valori[-1]
+        fonti = {c: v for c, v in zip(COLONNE, valori[:-1])}
+        fuori.append({
+            "nome": norm(nome), "grezzo": f"{m.group(1)} {nome.strip()}",
+            "prob": media, "stato": "titolare" if media >= 0.6 else "panchina",
+            "fonti": fonti,
+            "spread": (max(valori[:-1]) - min(valori[:-1])) if len(valori) > 2 else 0.0,
+            "nota": "", "ufficiale": False,
+        })
+    return fuori
+
+
+def ispeziona(timeout: int = 25) -> dict:
+    """Misure grezze della pagina: servono a capire se il contenuto c'e'
+    davvero nell'HTML o se lo costruisce il browser con JavaScript."""
+    r = requests.get(URL, headers=UA, timeout=timeout)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+    testo = soup.get_text(" ", strip=True)
+    return {"byte": len(r.text), "tabelle": len(soup.find_all("table")),
+            "percentuali": len(re.findall(r"\d{1,3}\s*%", testo)),
+            "righe_riconosciute": len(_da_testo(testo)),
+            "assaggio": testo[:400]}
+
+
 def scarica(timeout: int = 25) -> dict:
     """{CLUB: {'giocatori': [...], 'clean_sheet': float|None}}"""
     r = requests.get(URL, headers=UA, timeout=timeout)
@@ -100,6 +138,25 @@ def scarica(timeout: int = 25) -> dict:
                     "stato": "indisponibile", "fonti": {}, "spread": 0.0,
                     "nota": c2.strip(), "ufficiale": False,
                 })
+
+    # Se le tabelle non si sono lette (impaginazione diversa), ci riproviamo
+    # sul testo, spezzato per squadra sulle intestazioni trovate.
+    if sum(1 for s in squadre.values() for g in s["giocatori"]
+           if g["stato"] != "indisponibile") < 40:
+        testo = soup.get_text(" ", strip=True)
+        titoli = [(m.start(), norm(m.group(1)))
+                  for m in re.finditer(r"##\s*([A-Za-z\u00c0-\u00ff' ]{3,20})", testo)]
+        righe = _da_testo(testo)
+        if righe:
+            for g in righe:
+                pos = testo.find(g["grezzo"].split()[-1])
+                club_g = None
+                for start, nome_club in titoli:
+                    if start <= pos:
+                        club_g = nome_club
+                squadre.setdefault(club_g or "SCONOSCIUTA",
+                                   {"giocatori": [], "clean_sheet": None})
+                squadre[club_g or "SCONOSCIUTA"]["giocatori"].append(g)
     return squadre
 
 
