@@ -14,7 +14,7 @@ import argparse, datetime as dt, os, sys
 import requests
 
 import rosa, modello, formazione, stato
-import understat, calendario, probabili
+import calendario, probabili, statistiche
 
 ORE_PRIMA = 6
 FINESTRA = 0.75          # il cron gira ogni 30 minuti
@@ -49,13 +49,12 @@ def calcola(correzioni: dict | None = None):
         return None
     g_num, kickoff, turno = turno_info
 
-    guasti = []
-    try:
-        stats = understat.scarica()
-        club_stats = understat.squadre()
-    except Exception as e:
-        stats, club_stats = {}, {}
-        guasti.append(f"statistiche Understat non raggiungibili ({type(e).__name__})")
+    stats, club_stats, fonte_stat, guasti = statistiche.scarica()
+    if fonte_stat is None:
+        guasti = ["nessuna fonte di statistiche raggiungibile (" +
+                  "; ".join(g[:60] for g in guasti) + ")"]
+    else:
+        guasti = []
     try:
         prob_dati = probabili.scarica()
     except Exception as e:
@@ -246,11 +245,15 @@ def diagnosi():
     except Exception as e:
         esiti.append(("Calendario", f"ERRORE {type(e).__name__}: {e}", True))
 
-    try:
-        st = understat.scarica()
-        esiti.append(("Understat", f"{len(st)} giocatori con statistiche", False))
-    except Exception as e:
-        esiti.append(("Understat", f"ERRORE {type(e).__name__}: {e}", True))
+    gioc, sq, fonte, guasti = statistiche.scarica()
+    if fonte:
+        agganciati = sum(1 for _, n, _, u, _ in rosa.GIOCATORI
+                         if statistiche.trova(gioc, u, n))
+        esiti.append(("Statistiche", f"fonte {fonte}: {len(gioc)} giocatori, "
+                                     f"{agganciati}/25 tuoi agganciati, "
+                                     f"{len(sq)} squadre", agganciati < 15))
+    else:
+        esiti.append(("Statistiche", "nessuna fonte risponde — " + " | ".join(guasti), True))
 
     try:
         pr = probabili.scarica()
