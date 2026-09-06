@@ -1,138 +1,135 @@
-# FantaBuddy — la formazione su Telegram
+# FantaBuddy — la formazione consigliata su Telegram
 
 Ti scrive due volte a giornata:
 
 - **sei ore prima del primo match**, la formazione completa con la motivazione
   di ogni scelta;
-- **quando escono le formazioni ufficiali della partita di apertura**, un
-  secondo messaggio con le sole correzioni: chi entra, chi esce e perche'.
-  Arriva una volta sola, perche' dopo il primo fischio la formazione non e' piu'
-  modificabile. Se non cambia niente te lo dice comunque.
+- **se esce la formazione ufficiale della partita di apertura**, un secondo
+  messaggio con le sole correzioni. Arriva una volta sola: dopo il primo
+  fischio la formazione non e' piu' modificabile.
+
+**A turno iniziato tace.** Da quando comincia la prima partita fino alla fine
+dell'ultima non manda niente e non consuma niente: non c'e' piu' nulla che tu
+possa cambiare. Riprende quando il calendario passa alla giornata dopo.
 
 ---
 
 # Guida passo passo
 
-Non serve saper programmare. Venti minuti, una volta sola.
+## 1. Token del bot Telegram
 
-## 1. Rifai il token del bot Telegram
+Su Telegram, **@BotFather** → `/revoke` → scegli **FantaBuddy_bot** → copia il
+token nuovo.
 
-Il token che avevi mandato via chat va considerato bruciato.
+## 2. Chat id
 
-1. Su Telegram cerca **@BotFather**.
-2. Scrivi `/revoke` e scegli **FantaBuddy_bot**.
-3. Copia il token nuovo che ti risponde.
+Apri la chat con il bot e premi **Avvia**. Poi nel browser:
 
-## 2. Trova il tuo chat id
+    https://api.telegram.org/botTOKEN/getUpdates
 
-1. Apri la chat con **@FantaBuddy_bot** e premi **Avvia** (o scrivi "ciao").
-2. Nel browser apri, mettendo il token nuovo al posto di `TOKEN`:
+Cerca `"chat":{"id":123456789`. Quel numero e' il chat id.
 
-       https://api.telegram.org/botTOKEN/getUpdates
+## 3. Repository
 
-3. Se esce `{"ok":true,"result":[]}` non hai ancora scritto al bot: torna al
-   punto 1 e ricarica.
-4. Cerca `"chat":{"id":123456789`. Quel numero e' il tuo chat id.
+Su github.com: **+** → **New repository**, nome `fantabuddy`, lascialo
+**Public** (le password stanno nei Secrets, non nei file, e i repository
+pubblici hanno le automazioni gratuite senza limiti).
 
-## 3. Crea il repository
+## 4. Carica i dodici file
 
-1. Su **github.com**: **+** in alto a destra → **New repository**.
-2. Nome `fantabuddy`, lascialo **Public**.
-   Le password non stanno nei file, stanno nei Secrets del punto 5, che nessuno
-   puo' leggere. E i repository pubblici hanno le automazioni gratuite senza
-   limiti. L'unica cosa visibile e' la tua rosa.
-3. **Create repository**.
+**uploading an existing file**, trascinali tutti, **Commit changes**. Sono
+tutti allo stesso livello, non ci sono sottocartelle.
 
-## 4. Carica gli undici file
-
-Nella pagina del repository: **uploading an existing file**, trascina dentro
-tutti e undici i file (sono tutti allo stesso livello, non ci sono cartelle),
-poi **Commit changes**.
-
-## 5. Metti le tre password nei Secrets
+## 5. Tre Secrets
 
 **Settings** → **Secrets and variables** → **Actions** → **New repository
-secret**. Ne crei tre, con questi nomi esatti:
+secret**, con questi nomi esatti:
 
 | Name | Secret |
 |---|---|
-| `TELEGRAM_TOKEN` | il token nuovo di BotFather |
+| `TELEGRAM_TOKEN` | il token di BotFather |
 | `TELEGRAM_CHAT_ID` | il numero del punto 2 |
 | `FOOTBALL_DATA_TOKEN` | la chiave di football-data.org |
 
-## 6. Crea il file dell'automazione
+## 6. Il file dell'automazione
 
-Questo va creato a mano, perche' i browser non caricano le cartelle che
-iniziano con un punto.
+Va creato a mano: i browser non caricano le cartelle che iniziano col punto.
 
-1. Scheda **Code** → **Add file** → **Create new file**.
-2. Come nome scrivi, barre comprese:
+**Add file** → **Create new file**, come nome scrivi
+`.github/workflows/fantabuddy.yml` (le barre creano le cartelle da sole),
+incolla il contenuto di `fantabuddy.yml`, **Commit changes**.
 
-       .github/workflows/fantabuddy.yml
+## 7. Accendi
 
-   Mentre digiti le barre, GitHub crea da solo le cartelle: le vedi comparire
-   come etichette grigie prima della casella.
-3. Incolla dentro il contenuto del file `fantabuddy.yml` che ti ho dato.
-4. **Commit changes**.
-
-## 7. Accendi e prova
-
-**Actions** → se compare un avviso, **I understand my workflows, go ahead and
-enable them** → a sinistra **FantaBuddy** → **Run workflow**.
-
-Se il pallino diventa verde, guarda Telegram. Da qui in poi gira da solo.
-
-## Se qualcosa non va
-
-Clicca sull'esecuzione fallita e leggi l'ultima riga rossa.
-
-| Errore | Significato |
-|---|---|
-| `KeyError: 'TELEGRAM_TOKEN'` | manca un secret o il nome e' scritto male |
-| `401 Unauthorized` | token Telegram sbagliato o revocato |
-| `403 Forbidden` | chiave football-data sbagliata |
-| `chat not found` | chat id sbagliato, rifai il punto 2 |
-| `ModuleNotFoundError` | manca un file: ricontrolla che siano tutti e undici |
-| `variabile playersData non trovata` | Understat ha cambiato pagina |
+**Actions** → se serve **enable workflows** → **FantaBuddy** → **Run workflow**.
+Il passaggio **diagnosi** ti dice se i pezzi rispondono.
 
 ---
 
 # Come decide
 
-Per ogni tuo giocatore calcola un **fantavoto atteso**:
+    P(gioca) x (voto base + bonus attesi + malus attesi)
 
-    probabilita' di giocare x (voto base + bonus attesi + malus attesi)
-
-- **Probabilita' di giocare**: media pesata di Fantacalcio.it, Gazzetta, SOS
-  Fanta e Sky, dall'aggregato di fantacalcio-online.com. Il bot legge anche
-  quanto le quattro redazioni sono in disaccordo, e te lo dice: un 70% su cui
-  concordano tutte non e' un 70% su cui litigano. Gli infortunati vanno a zero.
-- **Bonus attesi**: xG e xA per novanta minuti da Understat, aggiornati dopo
-  ogni giornata, scalati per i minuti attesi e corretti per gli xG che concede
-  l'avversario e per il fattore campo.
-- **Rigori**: gerarchia dal dischetto x rigori attesi del club x tasso di
-  realizzazione. E' la componente piu' prevedibile del fantacalcio.
-- **Portieri**: usa la quota di porta inviolata del mercato scommesse.
+- **P(gioca)**: la percentuale che Fantacalcio.it assegna a ogni giocatore
+  nelle probabili formazioni. Chi non compare ne' fra i titolari ne' in
+  panchina viene trattato come non convocato, non stimato a caso.
+- **Bonus attesi**: gol e assist per novanta minuti, dalle stime scritte in
+  `rosa.py`, scalate per i minuti attesi e per il fattore campo.
+- **Rigori**: gerarchia dal dischetto per rigori attesi del club per tasso di
+  realizzazione. E' la parte piu' prevedibile del fantacalcio.
+- **Portieri**: gol subiti attesi e probabilita' di porta inviolata.
 
 Poi prova tutti e sette i moduli e tiene quello col totale piu' alto.
 
+# Il rendimento si aggiorna da solo
+
+A turno concluso il bot chiede a football-data.org il dettaglio di ogni
+partita, estrae marcatori e assistman, e accumula i numeri in
+`rendimento.json`, che il workflow ricommitta nel repository.
+
+Le stime di `rosa.py` restano come punto di partenza, ma pesano sempre meno:
+finche' le giornate sono poche domina la stima, dopo una decina di partite
+conta quasi solo quello che il giocatore fa in campo. Nel messaggio lo vedi
+scritto: *"2 gol e 1 assist in 3 giornate, pesati al 33%, quindi 0,56 gol e
+0,17 assist attesi ogni 90'"*.
+
+Quindi `rosa.py` non va piu' ritoccato ogni settimana. Serve solo per i
+rigoristi, il regolamento e i trasferimenti.
+
+**Cosa non si puo' avere: il fantavoto e la media voto.** Sono giudizi
+redazionali di Gazzetta e Fantacalcio.it, non dati pubblici, e nessuna fonte
+gratuita li espone. Il modello usa 6.0 come voto base e prevede i bonus, che
+sono la parte che sposta la classifica.
+
 # Manutenzione
 
-- **`rosa.py`**, campo `rig`: posizione nella gerarchia dei rigoristi.
-  Aggiornala quando cambia, e' il parametro che sposta di piu'.
-- **`rosa.py`**, sezione regolamento: di default il gol vale 3 per tutti i
-  ruoli, come da Fantacalcio Classic. Se la tua lega differenzia
-  (3 attaccante / 3,5 centrocampista / 4 difensore) cambia il dizionario `GOL`.
+- **`rig`** in `rosa.py`: posizione fra i rigoristi del club. Aggiornala
+  quando cambia, e' il parametro che pesa di piu'.
+- **`gol90` e `ass90`**: solo il punto di partenza. Dopo qualche giornata ci
+  pensa `rendimento.json`.
+- **Sezione regolamento**: di default il gol vale 3 per tutti i ruoli, come da
+  Fantacalcio Classic. Se la tua lega differenzia (3 attaccante /
+  3,5 centrocampista / 4 difensore) cambia il dizionario `GOL`.
   **Verificalo prima di fidarti del bot.**
-- Dopo un trasferimento di gennaio, aggiorna nome e club in `rosa.py`.
+
+Dopo un trasferimento di gennaio, aggiorna nome e club.
+
+# Perche' non ci sono gli xG
+
+Understat e FBref, le due fonti gratuite di expected goals, rifiutano le
+richieste che arrivano dai datacenter, e i server di GitHub sono datacenter.
+Abbiamo provato l'accesso diretto e quattro ponti pubblici: tutti bloccati.
+Restavano solo servizi a pagamento o un account terzo con quota mensile, e
+abbiamo scelto di non aggiungere quella fragilita'.
+
+Quello che il bot ha in mano — chi gioca, con che percentuale, e chi tira i
+rigori — sono comunque i due fattori che pesano di piu' sul risultato.
 
 # Limiti da conoscere
 
 - Il bot prevede i bonus, non la prestazione: il voto base e' fisso a 6.0.
-- Le formazioni ufficiali escono circa un'ora prima e il controllo gira ogni
-  dieci minuti, quindi il secondo messaggio puo' arrivare con dieci minuti di
-  ritardo, e su GitHub gratuito i cron slittano di qualche minuto in piu'.
-  Se hai un giocatore nella partita di apertura, tieni comunque d'occhio il
-  telefono nell'ora prima del via.
+- Le ufficiali escono circa un'ora prima e il controllo gira ogni dieci
+  minuti: se hai un giocatore nella partita di apertura, tieni comunque
+  d'occhio il telefono.
 - La lettura delle probabili dipende da come e' impaginato un sito. Se cambia,
-  il bot non si blocca: ripiega su stime prudenziali e te lo scrive.
+  il bot non si blocca: te lo scrive nel messaggio e usa stime prudenziali.
