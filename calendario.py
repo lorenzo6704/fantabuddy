@@ -23,6 +23,7 @@ def partite(timeout: int = 20) -> list[dict]:
     out = []
     for m in r.json().get("matches", []):
         out.append({
+            "id": m.get("id"),
             "giornata": m.get("matchday"),
             "stato": m.get("status"),
             "inizio": dt.datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00")),
@@ -50,6 +51,21 @@ def prossima_giornata(adesso: dt.datetime | None = None):
     turno = sorted([p for p in tutte if p["giornata"] == g],
                    key=lambda p: p["inizio"])
     return g, turno[0]["inizio"], turno
+
+
+def giornata_conclusa(adesso: dt.datetime | None = None):
+    """L'ultima giornata con tutte le partite finite. Serve a raccogliere i
+    bonus quando non c'e' piu' niente da giocare."""
+    adesso = adesso or dt.datetime.now(dt.timezone.utc)
+    tutte = partite()
+    finite = [p for p in tutte if p["stato"] == "FINISHED"]
+    if not finite:
+        return None
+    g = max(p["giornata"] for p in finite)
+    del_turno = [p for p in tutte if p["giornata"] == g]
+    if any(p["stato"] != "FINISHED" for p in del_turno):
+        return None          # il turno non e' ancora completo
+    return g, del_turno
 
 
 def avversario(club: str, turno: list[dict]) -> tuple[str, bool] | None:
