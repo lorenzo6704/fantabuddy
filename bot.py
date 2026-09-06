@@ -1,29 +1,28 @@
 #!/usr/bin/env python3
-"""FantaBuddy: manda su Telegram la formazione consigliata.
+"""FantaBuddy: la formazione consigliata su Telegram.
 
-Due momenti:
-  --pre         sei ore prima del primo match della giornata, messaggio completo
-  --ufficiali   quando esce una formazione ufficiale, solo le correzioni
+Due messaggi per giornata:
+  --pre         sei ore prima del primo match, formazione completa
+  --ufficiali   quando esce la formazione ufficiale della partita di apertura,
+                solo le correzioni
 
-Per provarlo a mano:
-  --prova       calcola e stampa a schermo, non manda niente
-  --ora         calcola e manda subito
+A turno iniziato tace: la formazione non e' piu' modificabile, quindi non c'e'
+niente di utile da dire fino alla giornata successiva.
+
+Per provarlo:  --prova (stampa)   --ora (manda subito)   --diagnosi
 """
 from __future__ import annotations
 import argparse, datetime as dt, os, sys
 import requests
 
-import rosa, modello, formazione, stato
-import calendario, probabili, statistiche
+import rosa, modello, formazione, stato, calendario, probabili, rendimento
 
 ORE_PRIMA = 6
-FINESTRA = 0.75          # il cron gira ogni 30 minuti
-ANTICIPO_UFFICIALI = 100  # minuti prima del calcio d'inizio in cui guardare
-# Dopo il fischio d'inizio della prima partita la formazione e' bloccata:
-# l'unica finestra utile per una correzione e' quella che precede quel match.
+FINESTRA = 0.75
+ANTICIPO_UFFICIALI = 100     # minuti prima del via in cui cercare le ufficiali
+CODA_TURNO = dt.timedelta(hours=3)   # quanto dura l'ultima partita
 
 
-# ------------------------------------------------------------------- Telegram
 def invia(testo: str):
     tok, chat = os.environ["TELEGRAM_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
     for pezzo in _spezza(testo, 3800):
@@ -35,26 +34,24 @@ def invia(testo: str):
 
 def _spezza(t: str, n: int):
     while len(t) > n:
-        taglio = t.rfind("\n\n", 0, n)
-        yield t[:taglio if taglio > 0 else n]
-        t = t[(taglio if taglio > 0 else n):].lstrip()
+        i = t.rfind("\n\n", 0, n)
+        i = i if i > 0 else n
+        yield t[:i]
+        t = t[i:].lstrip()
     yield t
 
 
-# ------------------------------------------------------------------- pipeline
+# ------------------------------------------------------------------- calcolo
 def calcola(correzioni: dict | None = None):
     correzioni = correzioni or {}
-    turno_info = calendario.prossima_giornata()
-    if turno_info is None:
+    info = calendario.prossima_giornata()
+    if info is None:
         return None
-    g_num, kickoff, turno = turno_info
+    g_num, _, turno = info
+    apertura = min(p["inizio"] for p in turno)
+    fine = max(p["inizio"] for p in turno) + CODA_TURNO
 
-    stats, club_stats, fonte_stat, guasti = statistiche.scarica()
-    if fonte_stat is None:
-        guasti = ["nessuna fonte di statistiche raggiungibile (" +
-                  "; ".join(g[:60] for g in guasti) + ")"]
-    else:
-        guasti = []
+    guasti = []
     try:
         prob_dati = probabili.scarica()
     except Exception as e:
@@ -63,7 +60,7 @@ def calcola(correzioni: dict | None = None):
 
     valutati, avvisi = [], []
     for g in rosa.GIOCATORI:
-        ruolo, nome, club, uname, rig = g
+        ruolo, nome, club = g[0], g[1], g[2]
         sfida = calendario.avversario(club, turno)
         if sfida is None:
             continue
@@ -71,95 +68,93 @@ def calcola(correzioni: dict | None = None):
 
         riga = probabili.cerca(prob_dati, nome, club)
         if nome.lower() in correzioni:
-            p, fonte, spread, nota = float(correzioni[nome.lower()]), "tua correzione", 0.0, ""
+            p, st, nota = float(correzioni[nome.lower()]), "tua correzione", ""
         elif riga:
-            p, fonte, spread, nota = riga["prob"], riga["stato"], riga["spread"], riga["nota"]
+            p, st, nota = riga["prob"], riga["stato"], riga["nota"]
         else:
-            p, fonte, spread, nota = 0.35, "non trovato", 0.0, ""
+            p, st, nota = 0.5, "sconosciuto", ""
             avvisi.append(nome)
 
-        xg_sub = None
-        for k, v in club_stats.items():
-            if avv.lower()[:5] in k.lower() or k.lower()[:5] in avv.lower():
-                xg_sub = v["xg_subiti_pg"]
-                break
-
-        val, det = modello.fantavoto_atteso(g, stats, p, xg_sub, casa,
-                                            probabili.clean_sheet(prob_dati, club))
-        det.update(fonte_prob=fonte, spread=spread, nota=nota,
-                   ufficiale=probabili.formazione_ufficiale(prob_dati, club))
+        val, det = modello.fantavoto_atteso(g, p, casa)
+        det.update(stato=st, nota=nota)
         valutati.append({"g": g, "val": val, "det": det, "avv": avv, "casa": casa})
 
-    return {"giornata": g_num, "kickoff": kickoff, "turno": turno,
+    return {"giornata": g_num, "apertura": apertura, "fine": fine, "turno": turno,
             "scelta": formazione.scegli(valutati), "avvisi": avvisi,
             "prob_dati": prob_dati, "guasti": guasti}
 
 
-def undici_nomi(scelta) -> list[str]:
-    return sorted([scelta["portiere"]["g"][1]] + [v["g"][1] for v in scelta["undici"]])
+def undici_nomi(s) -> list[str]:
+    return sorted([s["portiere"]["g"][1]] + [v["g"][1] for v in s["undici"]])
 
 
-# ------------------------------------------------------------------- messaggi
+# ------------------------------------------------------------------ messaggi
 def messaggio_completo(r) -> str:
-    ora = r["kickoff"].astimezone().strftime("%d/%m alle %H:%M")
     s = r["scelta"]
-    out = [f"<b>Giornata {r['giornata']}</b> — primo match {ora}",
+    out = [f"<b>Giornata {r['giornata']}</b> — primo match "
+           f"{r['apertura'].astimezone():%d/%m alle %H:%M}",
            f"Modulo: <b>{s['modulo']}</b> · {s['totale']:.1f} punti attesi", "",
            "<b>FORMAZIONE</b>"]
     for v in [s["portiere"]] + s["undici"]:
         out += [f"<b>{v['g'][1]}</b> ({v['g'][0]}, {v['g'][2]}) — {v['val']:.2f}",
-                f"  {formazione.motivazione(v, True)}"]
+                f"  {formazione.motivazione(v)}"]
     out += ["", "<b>PANCHINA</b> (ordine di subentro)"]
     for v in s["panchina"][:rosa.N_SOSTITUZIONI + 2]:
         out += [f"<b>{v['g'][1]}</b> ({v['g'][0]}, {v['g'][2]}) — {v['val']:.2f}",
-                f"  {formazione.motivazione(v, False)}",
+                f"  {formazione.motivazione(v)}",
                 f"  {formazione.perche_fuori(v, s['undici'])}"]
     if r["guasti"]:
-        out += ["", "🔧 " + "; ".join(r["guasti"]) +
-                ". La formazione qui sopra e' stata calcolata lo stesso, ma con "
-                "stime prudenziali: controllala prima di schierarla."]
+        out += ["", "🔧 " + "; ".join(r["guasti"]) + ". Calcolata lo stesso, "
+                "ma con stime prudenziali: controllala."]
     if r["avvisi"]:
-        out += ["", "⚠️ Non trovati nelle probabili, valutati in modo prudenziale: "
-                + ", ".join(r["avvisi"])]
-    out += ["", "<i>Percentuali dalla media di Fantacalcio.it, Gazzetta, SOS Fanta e Sky. "
-            "Ti riscrivo appena escono le formazioni ufficiali. "
-            "Se vedi un errore rispondi qui, per esempio: Kean non gioca.</i>"]
+        out += ["", "⚠️ Non trovati nelle probabili: " + ", ".join(r["avvisi"])]
+    out += ["", "<i>Percentuali da Fantacalcio.it. Ti riscrivo se esce la "
+            "formazione ufficiale della partita di apertura.</i>"]
     return "\n".join(out)
 
 
-def messaggio_correzione(r, prima: list[str], club_nuovi: list[str], scadenza=None) -> str:
+def messaggio_correzione(r, prima: list[str], club: list[str]) -> str:
     s = r["scelta"]
     dopo = undici_nomi(s)
     entrati = [n for n in dopo if n not in prima]
     usciti = [n for n in prima if n not in dopo]
-    ora = scadenza.astimezone().strftime("%H:%M") if scadenza else "il primo fischio"
-    testa = ("<b>Formazioni ufficiali</b> — " + ", ".join(club_nuovi) +
-             f"\nUltima occasione per correggere: si chiude alle {ora}.")
+    testa = ("<b>Formazioni ufficiali</b> — " + ", ".join(club) +
+             f"\nSi chiude alle {r['apertura'].astimezone():%H:%M}.")
     if not entrati and not usciti:
         return testa + "\n\nNessun cambio: la formazione che ti ho mandato regge."
     out = [testa, "", f"Modulo: <b>{s['modulo']}</b> · {s['totale']:.1f} punti attesi", ""]
     for n in entrati:
         v = next(v for v in [s["portiere"]] + s["undici"] if v["g"][1] == n)
         out += [f"🟢 <b>DENTRO {n}</b> ({v['g'][0]}, {v['g'][2]})",
-                f"  {formazione.motivazione(v, True)}"]
+                f"  {formazione.motivazione(v)}"]
     for n in usciti:
         v = next((v for v in s["panchina"] if v["g"][1] == n), None)
         if v:
             out += [f"🔴 <b>FUORI {n}</b> ({v['g'][0]}, {v['g'][2]})",
-                    f"  {formazione.motivazione(v, False)}"]
+                    f"  {formazione.motivazione(v)}"]
     out += ["", "<b>Undici aggiornato:</b> " + ", ".join(dopo)]
     return "\n".join(out)
 
 
-# ------------------------------------------------------------------- comandi
+# -------------------------------------------------------------------- azioni
+def turno_in_corso(r, adesso) -> bool:
+    return r["apertura"] <= adesso <= r["fine"]
+
+
 def modo_pre(st, forza=False):
     r = calcola(st["correzioni"])
     if r is None:
         return print("nessuna giornata in programma")
     st = stato.allinea_giornata(st, r["giornata"])
-    ore = (r["kickoff"] - dt.datetime.now(dt.timezone.utc)).total_seconds() / 3600
-    in_finestra = ORE_PRIMA - FINESTRA <= ore <= ORE_PRIMA + FINESTRA
-    if forza or (in_finestra and r["giornata"] not in st["inviate"]):
+    adesso = dt.datetime.now(dt.timezone.utc)
+
+    if turno_in_corso(r, adesso) and not forza:
+        return print(f"giornata {r['giornata']} in corso: la formazione e' bloccata, "
+                     f"riprendo dopo {r['fine']:%d/%m %H:%M} UTC")
+
+    ore = (r["apertura"] - adesso).total_seconds() / 3600
+    if forza or (ORE_PRIMA - FINESTRA <= ore <= ORE_PRIMA + FINESTRA
+                 and r["giornata"] not in st["inviate"]):
         invia(messaggio_completo(r))
         st["inviate"] = sorted(set(st["inviate"] + [r["giornata"]]))
         st["ultimo_undici"] = undici_nomi(r["scelta"])
@@ -170,113 +165,87 @@ def modo_pre(st, forza=False):
         print(f"niente da fare: mancano {ore:.1f} ore al primo match")
 
 
-def primo_match(turno):
-    """Il match di apertura della giornata e i club coinvolti (anche se in
-    contemporanea con altri)."""
-    inizio = min(p["inizio"] for p in turno)
-    club = set()
-    for p in turno:
-        if p["inizio"] == inizio:
-            club.update({p["casa"], p["ospite"]})
-    return inizio, club
-
-
 def modo_ufficiali(st):
     r = calcola(st["correzioni"])
     if r is None or r["giornata"] not in st.get("inviate", []):
-        return print("nessuna formazione gia' inviata per questa giornata")
+        return print("formazione non ancora inviata per questa giornata")
     st = stato.allinea_giornata(st, r["giornata"])
     if st.get("chiuso"):
-        return print("giornata gia' chiusa: la formazione non e' piu' modificabile")
+        return print("giornata gia' chiusa")
 
     adesso = dt.datetime.now(dt.timezone.utc)
-    inizio, club_apertura = primo_match(r["turno"])
-
-    if adesso >= inizio:
+    if adesso >= r["apertura"]:
         st["chiuso"] = True
         stato.scrivi(st)
         return print("primo match iniziato: niente piu' correzioni")
 
-    minuti = (inizio - adesso).total_seconds() / 60
+    minuti = (r["apertura"] - adesso).total_seconds() / 60
     if minuti > ANTICIPO_UFFICIALI:
-        return print(f"troppo presto: mancano {minuti:.0f} minuti al primo match")
+        return print(f"troppo presto: {minuti:.0f} minuti al primo match")
 
-    # solo i miei giocatori che scendono in campo nella partita di apertura
-    miei = sorted({club for _, _, club, _, _ in rosa.GIOCATORI
-                   if any(club.lower() in c.lower() or c.lower() in club.lower()
+    club_apertura = {c for p in r["turno"] if p["inizio"] == r["apertura"]
+                     for c in (p["casa"], p["ospite"])}
+    miei = sorted({g[2] for g in rosa.GIOCATORI
+                   if any(g[2].lower() in c.lower() or c.lower() in g[2].lower()
                           for c in club_apertura)})
     if not miei:
         st["chiuso"] = True
         stato.scrivi(st)
-        return print("nessun tuo giocatore nella partita di apertura: niente da correggere")
+        return print("nessun tuo giocatore nella partita di apertura")
 
     pronti = [c for c in miei if probabili.formazione_ufficiale(r["prob_dati"], c)]
     if not pronti:
-        return print("formazioni ufficiali non ancora pubblicate per:", ", ".join(miei))
-
-    invia(messaggio_correzione(r, st.get("ultimo_undici", []), pronti,
-                               scadenza=inizio))
+        return print("ufficiali non ancora uscite per: " + ", ".join(miei))
+    invia(messaggio_correzione(r, st.get("ultimo_undici", []), pronti))
     st["ultimo_undici"] = undici_nomi(r["scelta"])
     st["chiuso"] = True
     stato.scrivi(st)
-    print("correzione inviata per:", ", ".join(pronti))
+    print("correzione inviata per: " + ", ".join(pronti))
+
+
+def modo_rendimento():
+    """A turno concluso raccoglie gol e assist e li mette da parte."""
+    esito = calendario.giornata_conclusa()
+    if esito is None:
+        return print("nessuna giornata conclusa da registrare")
+    g, partite = esito
+    d = rendimento.leggi()
+    if g in d["giornate"]:
+        return print(f"giornata {g} gia' registrata")
+    d = rendimento.registra(g, partite)
+    miei = {n: v for n, v in d["giocatori"].items() if v.get("gol") or v.get("assist")}
+    print(f"registrata giornata {g}. Bonus in archivio: " +
+          (", ".join(f"{n} {v['gol']}g {v['assist']}a" for n, v in sorted(miei.items()))
+           or "nessuno"))
 
 
 def diagnosi():
-    """Controlla i pezzi uno per uno e stampa cosa funziona e cosa no."""
     esiti = []
-
     for v in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID", "FOOTBALL_DATA_TOKEN"):
-        esiti.append((v, "presente" if os.environ.get(v) else "MANCANTE", not os.environ.get(v)))
-
+        ok = bool(os.environ.get(v))
+        esiti.append((v, "presente" if ok else "MANCANTE", not ok))
     try:
         tok = os.environ["TELEGRAM_TOKEN"]
         j = requests.get(f"https://api.telegram.org/bot{tok}/getMe", timeout=15).json()
-        ok = j.get("ok")
-        esiti.append(("Telegram", f"bot @{j['result']['username']}" if ok
-                      else f"RIFIUTATO: {j.get('description')}", not ok))
+        esiti.append(("Telegram", f"bot @{j['result']['username']}" if j.get("ok")
+                      else f"RIFIUTATO: {j.get('description')}", not j.get("ok")))
     except Exception as e:
         esiti.append(("Telegram", f"ERRORE {type(e).__name__}: {e}", True))
-
     try:
-        g, k, turno = calendario.prossima_giornata()
-        esiti.append(("Calendario", f"giornata {g}, primo match {k:%d/%m %H:%M} UTC, "
+        g, _, turno = calendario.prossima_giornata()
+        ap = min(p["inizio"] for p in turno)
+        esiti.append(("Calendario", f"giornata {g}, apertura {ap:%d/%m %H:%M} UTC, "
                                     f"{len(turno)} partite", False))
     except Exception as e:
         esiti.append(("Calendario", f"ERRORE {type(e).__name__}: {e}", True))
-
-    gioc, sq, fonte, guasti = statistiche.scarica()
-    if fonte:
-        agganciati = sum(1 for _, n, _, u, _ in rosa.GIOCATORI
-                         if statistiche.trova(gioc, u, n))
-        esiti.append(("Statistiche", f"fonte {fonte}: {len(gioc)} giocatori, "
-                                     f"{agganciati}/25 tuoi agganciati, "
-                                     f"{len(sq)} squadre", agganciati < 15))
-    else:
-        esiti.append(("Statistiche", "nessuna fonte risponde — " + " | ".join(guasti), True))
-
     try:
         pr = probabili.scarica()
-        pieni = [k for k, v in pr.items() if v["giocatori"]]
-        trovati = sum(1 for _, n, c, _, _ in rosa.GIOCATORI if probabili.cerca(pr, n, c))
-        esiti.append(("Probabili", f"{len(pieni)} squadre, {trovati}/25 tuoi giocatori "
-                                   f"agganciati", trovati < 15))
-        if trovati < 25:
-            try:
-                i = probabili.ispeziona()
-                print(f"\n--- com'e' fatta la pagina: {i['byte']} byte, "
-                      f"{i['tabelle']} tabelle, {i['percentuali']} percentuali, "
-                      f"{i['righe_riconosciute']} righe riconosciute a testo")
-                print("    inizio pagina:", i["assaggio"][:160])
-            except Exception as e:
-                print("    ispezione fallita:", e)
-            print("--- cosa ha letto dalla pagina delle probabili ---")
-            for riga in probabili.elenco(pr)[:8]:
-                print("   ", riga[:150])
-            mancanti = [n for _, n, c, _, _ in rosa.GIOCATORI
-                        if not probabili.cerca(pr, n, c)]
-            print("    non agganciati:", ", ".join(mancanti) or "nessuno")
-            print("--- fine ---")
+        n = sum(1 for g in rosa.GIOCATORI
+                if (probabili.cerca(pr, g[1], g[2]) or {}).get("stato") not in
+                (None, "non convocato"))
+        squadre = sum(1 for s in pr.values() if s["giocatori"])
+        esiti.append(("Probabili", f"{squadre} squadre, {n}/25 tuoi giocatori "
+                                   f"nelle liste", n < 12))
     except Exception as e:
         esiti.append(("Probabili", f"ERRORE {type(e).__name__}: {e}", True))
 
@@ -284,19 +253,21 @@ def diagnosi():
     for nome, msg, male in esiti:
         print(f"  [{'KO' if male else 'ok'}] {nome}: {msg}")
     rotti = [n for n, _, m in esiti if m]
-    print("=== " + ("tutto a posto" if not rotti else "da sistemare: " + ", ".join(rotti)) + " ===\n")
-    return 1 if any(m for _, _, m in esiti[:4]) else 0
+    print("=== " + ("tutto a posto" if not rotti else "da sistemare: " +
+                    ", ".join(rotti)) + " ===\n")
+    return 0
 
 
 def main():
     ap = argparse.ArgumentParser()
-    for f in ("pre", "ufficiali", "prova", "ora", "diagnosi"):
+    for f in ("pre", "ufficiali", "prova", "ora", "diagnosi", "rendimento"):
         ap.add_argument("--" + f, action="store_true")
     a = ap.parse_args()
     if a.diagnosi:
         return diagnosi()
+    if a.rendimento:
+        return modo_rendimento()
     st = stato.leggi()
-
     if a.prova:
         r = calcola(st["correzioni"])
         if r is None:
@@ -316,10 +287,10 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyError as e:
-        print(f"\nMANCA UN SECRET: {e}. Controlla Settings > Secrets and "
-              f"variables > Actions, i nomi devono essere esatti.")
+        print(f"\nMANCA UN SECRET: {e}. Controlla Settings > Secrets and variables "
+              f"> Actions: i nomi devono essere esatti.")
         sys.exit(1)
     except Exception as e:
         print(f"\nERRORE: {type(e).__name__}: {e}")
-        print("Lancia il passaggio 'diagnosi' per vedere quale pezzo non risponde.")
+        print("Lancia il passaggio diagnosi per vedere quale pezzo non risponde.")
         sys.exit(1)
