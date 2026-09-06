@@ -5,9 +5,12 @@ Aggiungerne uno domani vuol dire aggiungere una riga a PROVIDER.
 """
 from __future__ import annotations
 import re, unicodedata
-import understat, fbref
+import understat, fbref, apifootball
 
-PROVIDER = [("Understat", understat), ("FBref", fbref)]
+# In ordine di preferenza. Understat e FBref sono migliori (xG veri) ma
+# bloccano gli indirizzi dei datacenter: restano in lista perche' funzionano
+# se un giorno fai girare il bot da casa tua.
+PROVIDER = [("Understat", understat), ("FBref", fbref), ("API-Football", apifootball)]
 
 
 def norm(s: str) -> str:
