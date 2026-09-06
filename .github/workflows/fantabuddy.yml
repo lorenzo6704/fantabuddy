@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write     # per ricommittare stato.json e rendimento.json
+  actions: write      # per cancellare i giri vecchi
 
 jobs:
   gira:
@@ -17,26 +18,16 @@ jobs:
       TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
-      APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-      APIFY_INPUT: ${{ secrets.APIFY_INPUT }}
-      APIFOOTBALL_KEY: ${{ secrets.APIFOOTBALL_KEY }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
       - run: pip install -r requirements.txt
 
-      # Dice subito quale pezzo non risponde, senza far fallire il resto
+      # Dice quale pezzo non risponde, senza far fallire il resto
       - name: diagnosi
         continue-on-error: true
         run: python bot.py --diagnosi
-
-      # Prova le fonti alternative di probabili formazioni.
-      # Lancialo a mano da Actions quando serve; poi puoi cancellare il blocco.
-      - name: sonda fonti
-        continue-on-error: true
-        if: github.event_name == 'workflow_dispatch'
-        run: python sonda.py
 
       - name: messaggio delle sei ore prima
         run: python bot.py --pre
@@ -49,7 +40,7 @@ jobs:
         continue-on-error: true
         run: python bot.py --rendimento
 
-      - name: salva cosa ha gia' mandato
+      - name: salva stato e rendimento
         if: always()
         run: |
           git config user.name  "fantabuddy"
@@ -57,3 +48,23 @@ jobs:
           git add stato.json rendimento.json || true
           git diff --staged --quiet || git commit -m "stato $(date -u +%F_%H:%M)"
           git push || true
+
+      # Tiene solo il giro corrente e quello precedente, cancella il resto.
+      # Attenzione: sparisce anche il log. Se stai cercando un errore, metti
+      # un cancelletto davanti alle righe di questo blocco finche' non hai finito.
+      - name: fai pulizia dei giri vecchi
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate \
+            "repos/${{ github.repository }}/actions/workflows/fantabuddy.yml/runs?per_page=100" \
+            --jq '.workflow_runs | sort_by(.created_at) | reverse | .[2:] | .[].id' \
+          | while read -r id; do
+              [ -n "$id" ] || continue
+              if gh api -X DELETE "repos/${{ github.repository }}/actions/runs/$id" >/dev/null 2>&1
+              then echo "cancellato $id"
+              else echo "saltato $id (ancora in corso)"
+              fi
+            done
