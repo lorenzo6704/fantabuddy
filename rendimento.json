@@ -1,1 +1,132 @@
-{"giornate": [], "giocatori": {}}
+{
+ "giornate": [
+  3
+ ],
+ "giocatori": {
+  "De Gea": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Palmisani": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Christensen": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Mancini": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Rrahmani": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Bartesaghi": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Theate": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Dragusin": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Ghilardi": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Correia": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Estupinan": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "De Bruyne": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Pulisic": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Zaniolo": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Goncalves": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Piotrowski": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Baldanzi": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Pessina": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Bakola": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Kean": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Davis": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Dovbyk": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Colombo": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Esposito Se.": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  },
+  "Toure": {
+   "gol": 0,
+   "assist": 0,
+   "giornate": 1
+  }
+ }
+}
