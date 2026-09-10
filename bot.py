@@ -212,7 +212,10 @@ def modo_rendimento():
     d = rendimento.leggi()
     if g in d["giornate"]:
         return print(f"giornata {g} gia' registrata")
-    d = rendimento.registra(g, partite)
+    try:
+        d = rendimento.registra(g, partite)
+    except Exception as e:
+        return print(f"raccolta rinviata al prossimo giro: {e}")
     miei = {n: v for n, v in d["giocatori"].items() if v.get("gol") or v.get("assist")}
     print(f"registrata giornata {g}. Bonus in archivio: " +
           (", ".join(f"{n} {v['gol']}g {v['assist']}a" for n, v in sorted(miei.items()))
@@ -236,6 +239,7 @@ def diagnosi():
         ap = min(p["inizio"] for p in turno)
         esiti.append(("Calendario", f"giornata {g}, apertura {ap:%d/%m %H:%M} UTC, "
                                     f"{len(turno)} partite", False))
+        print("  ...", calendario.radiografia())
     except Exception as e:
         esiti.append(("Calendario", f"ERRORE {type(e).__name__}: {e}", True))
     try:
