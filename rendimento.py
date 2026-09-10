@@ -15,11 +15,9 @@ piu' i valori scritti in rosa.py, e man mano che le giornate passano prende il
 sopravvento quello che il giocatore fa davvero sul campo.
 """
 from __future__ import annotations
-import json, os, re, unicodedata
-import requests
-
+import json, os, re, time, unicodedata
 import rosa
-from calendario import _headers
+import calendario
 
 FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rendimento.json")
 DETTAGLIO = "https://api.football-data.org/v4/matches/{id}"
@@ -65,11 +63,9 @@ def registra(giornata: int, partite: list[dict], timeout: int = 20) -> dict:
     for p in partite:
         if not p.get("id"):
             continue
-        r = requests.get(DETTAGLIO.format(id=p["id"]), headers=_headers(), timeout=timeout)
-        if r.status_code >= 400:
-            raise RuntimeError(f"football-data {r.status_code} sul match {p['id']}: "
-                               f"{r.text[:160]}")
-        m = r.json()
+        # una chiamata per partita, con la pausa che il piano gratuito impone
+        m = calendario.chiama(DETTAGLIO.format(id=p["id"]), timeout=timeout)
+        time.sleep(7)
         for gol in (m.get("goals") or []):
             for chi, campo in ((gol.get("scorer"), "gol"), (gol.get("assist"), "assist")):
                 nome = _mio((chi or {}).get("name", ""))
