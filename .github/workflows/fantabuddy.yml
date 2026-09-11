@@ -40,14 +40,21 @@ jobs:
         continue-on-error: true
         run: python bot.py --rendimento
 
+      # Se questo passaggio non riesce, il bot dimentica cosa ha gia' mandato
+      # e rischia di ripetersi: per questo stampa in chiaro com'e' andata.
       - name: salva stato e rendimento
         if: always()
         run: |
           git config user.name  "fantabuddy"
           git config user.email "bot@users.noreply.github.com"
-          git add stato.json rendimento.json || true
-          git diff --staged --quiet || git commit -m "stato $(date -u +%F_%H:%M)"
-          git push || true
+          git add stato.json rendimento.json 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "niente da salvare"
+          elif git commit -q -m "stato $(date -u +%F_%H:%M)" && git push -q; then
+            echo "stato salvato nel repository"
+          else
+            echo "ATTENZIONE: salvataggio fallito, il bot potrebbe ripetersi"
+          fi
 
       # Tiene solo il giro corrente e quello precedente, cancella il resto.
       # Attenzione: sparisce anche il log. Se stai cercando un errore, metti
