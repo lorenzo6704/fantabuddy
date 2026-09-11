@@ -17,8 +17,10 @@ import requests
 
 import rosa, modello, formazione, stato, calendario, probabili, rendimento
 
-ORE_PRIMA = 6
-FINESTRA = 0.75
+ORE_PRIMA = 6          # manda appena il primo match e' piu' vicino di cosi'
+# Niente finestra: i cron di GitHub slittano e possono saltare del tutto.
+# Meglio un messaggio in ritardo di mezz'ora che un messaggio mai arrivato:
+# la condizione e' "mancano meno di ORE_PRIMA e non l'ho ancora mandato".
 ANTICIPO_UFFICIALI = 100     # minuti prima del via in cui cercare le ufficiali
 CODA_TURNO = dt.timedelta(hours=3)   # quanto dura l'ultima partita
 
@@ -153,16 +155,17 @@ def modo_pre(st, forza=False):
                      f"riprendo dopo {r['fine']:%d/%m %H:%M} UTC")
 
     ore = (r["apertura"] - adesso).total_seconds() / 3600
-    if forza or (ORE_PRIMA - FINESTRA <= ore <= ORE_PRIMA + FINESTRA
-                 and r["giornata"] not in st["inviate"]):
+    if forza or (ore <= ORE_PRIMA and r["giornata"] not in st["inviate"]):
         invia(messaggio_completo(r))
         st["inviate"] = sorted(set(st["inviate"] + [r["giornata"]]))
         st["ultimo_undici"] = undici_nomi(r["scelta"])
         st["chiuso"] = False
         stato.scrivi(st)
-        print(f"inviata giornata {r['giornata']}")
+        print(f"inviata giornata {r['giornata']} ({ore:.1f} ore al via)")
+    elif r["giornata"] in st["inviate"]:
+        print(f"giornata {r['giornata']} gia' inviata")
     else:
-        print(f"niente da fare: mancano {ore:.1f} ore al primo match")
+        print(f"troppo presto: mancano {ore:.1f} ore al primo match")
 
 
 def modo_ufficiali(st):
