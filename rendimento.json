@@ -1,132 +1,133 @@
 {
  "giornate": [
-  3
+  3,
+  4
  ],
  "giocatori": {
   "De Gea": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Palmisani": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Christensen": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Mancini": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Rrahmani": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Bartesaghi": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Theate": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Dragusin": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Ghilardi": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Correia": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Estupinan": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "De Bruyne": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Pulisic": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Zaniolo": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Goncalves": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Piotrowski": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Baldanzi": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Pessina": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Bakola": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Kean": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Davis": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Dovbyk": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Colombo": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Esposito Se.": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   },
   "Toure": {
    "gol": 0,
    "assist": 0,
-   "giornate": 1
+   "giornate": 2
   }
  }
 }
