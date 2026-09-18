@@ -1,1 +1,22 @@
-{"offset": 0, "giornata": null, "correzioni": {}, "inviate": [], "ultimo_undici": [], "chiuso": false}
+{
+ "offset": 0,
+ "giornata": 5,
+ "correzioni": {},
+ "inviate": [
+  5
+ ],
+ "ultimo_undici": [
+  "Baldanzi",
+  "Colombo",
+  "Davis",
+  "De Bruyne",
+  "De Gea",
+  "Dragusin",
+  "Goncalves",
+  "Mancini",
+  "Rrahmani",
+  "Theate",
+  "Toure"
+ ],
+ "chiuso": false
+}
