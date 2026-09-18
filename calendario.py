@@ -114,17 +114,30 @@ def prossima_giornata(adesso: dt.datetime | None = None):
     return g, turno[0]["inizio"], turno
 
 
+def giornate_concluse(giorni_indietro: int = 90) -> list[tuple[int, list[dict]]]:
+    """Tutte le giornate con ogni partita finita, dalla piu' vecchia.
+
+    La finestra larga serve a recuperare anche i turni giocati prima che il
+    bot esistesse: l'archivio dei bonus si costruisce all'indietro, una
+    giornata per giro, senza sfondare il limite di chiamate.
+    """
+    tutte = partite(da=dt.date.today() - dt.timedelta(days=giorni_indietro))
+    per_giornata: dict[int, list[dict]] = {}
+    for p in tutte:
+        if p["giornata"]:
+            per_giornata.setdefault(p["giornata"], []).append(p)
+    out = []
+    for g in sorted(per_giornata):
+        gare = per_giornata[g]
+        if gare and all(x["stato"] == "FINISHED" for x in gare):
+            out.append((g, gare))
+    return out
+
+
 def giornata_conclusa(adesso: dt.datetime | None = None):
-    """L'ultima giornata con tutte le partite finite, se e' completa."""
-    tutte = partite()
-    finite = [p for p in tutte if p["stato"] == "FINISHED" and p["giornata"]]
-    if not finite:
-        return None
-    g = max(p["giornata"] for p in finite)
-    del_turno = [p for p in tutte if p["giornata"] == g]
-    if any(p["stato"] != "FINISHED" for p in del_turno):
-        return None
-    return g, del_turno
+    """L'ultima giornata completa."""
+    tutte = giornate_concluse()
+    return tutte[-1] if tutte else None
 
 
 def avversario(club: str, turno: list[dict]) -> tuple[str, bool] | None:
