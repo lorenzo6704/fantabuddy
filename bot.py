@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse, datetime as dt, os, sys
 import requests
 
-import rosa, modello, formazione, stato, calendario, probabili, rendimento
+import rosa, modello, formazione, stato, calendario, probabili, rendimento, voti
 
 ORE_PRIMA = 6          # manda appena il primo match e' piu' vicino di cosi'
 # Niente finestra: i cron di GitHub slittano e possono saltare del tutto.
@@ -261,6 +261,13 @@ def diagnosi():
                                    f"nelle liste", n < 12))
     except Exception as e:
         esiti.append(("Probabili", f"ERRORE {type(e).__name__}: {e}", True))
+
+    try:
+        print("\n--- sonda statistiche Fantacalcio.it ---")
+        print(voti.ispeziona())
+        print("--- fine sonda ---")
+    except Exception as e:
+        print("  sonda statistiche fallita:", e)
 
     print("\n=== DIAGNOSI FANTABUDDY ===")
     for nome, msg, male in esiti:
