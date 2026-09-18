@@ -207,22 +207,28 @@ def modo_ufficiali(st):
 
 
 def modo_rendimento():
-    """A turno concluso raccoglie gol e assist e li mette da parte."""
-    esito = calendario.giornata_conclusa()
-    if esito is None:
+    """Recupera i bonus delle giornate concluse, una per giro: cosi' si
+    riempiono anche i turni giocati prima che il bot esistesse, senza sfondare
+    il limite di chiamate del piano gratuito."""
+    concluse = calendario.giornate_concluse()
+    if not concluse:
         return print("nessuna giornata conclusa da registrare")
-    g, partite = esito
-    d = rendimento.leggi()
-    if g in d["giornate"]:
-        return print(f"giornata {g} gia' registrata")
+    archivio = rendimento.leggi()
+    mancanti = [(g, p) for g, p in concluse if g not in archivio["giornate"]]
+    if not mancanti:
+        return print(f"archivio aggiornato: giornate {archivio['giornate']}")
+
+    g, gare = mancanti[0]          # la piu' vecchia non ancora registrata
     try:
-        d = rendimento.registra(g, partite)
+        d, nota = rendimento.registra(g, gare)
     except Exception as e:
         return print(f"raccolta rinviata al prossimo giro: {e}")
+
     miei = {n: v for n, v in d["giocatori"].items() if v.get("gol") or v.get("assist")}
-    print(f"registrata giornata {g}. Bonus in archivio: " +
-          (", ".join(f"{n} {v['gol']}g {v['assist']}a" for n, v in sorted(miei.items()))
-           or "nessuno"))
+    print(f"giornata {g}: {nota}")
+    print("  archivio: " + (", ".join(f"{k} {v['gol']}g {v['assist']}a"
+                                      for k, v in sorted(miei.items())) or "ancora vuoto"))
+    print(f"  registrate {d['giornate']} · mancano {len(mancanti) - 1} turni")
 
 
 def diagnosi():
