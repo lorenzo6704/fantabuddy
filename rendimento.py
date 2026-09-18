@@ -54,26 +54,42 @@ def scrivi(d: dict):
     json.dump(d, open(FILE, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
-def registra(giornata: int, partite: list[dict], timeout: int = 20) -> dict:
-    """Aggiunge i bonus di una giornata conclusa. Idempotente."""
+def registra(giornata: int, partite: list[dict], timeout: int = 20) -> tuple[dict, str]:
+    """Aggiunge i bonus di una giornata conclusa. Idempotente.
+
+    Registra SOLO se la fonte fornisce davvero i marcatori. Se una partita e'
+    finita con dei gol ma l'API non li elenca, la giornata non viene salvata:
+    contare le presenze senza i bonus farebbe credere al modello che nessuno
+    segna mai, e sarebbe peggio che non avere dati.
+    """
     d = leggi()
     if giornata in d["giornate"]:
-        return d
+        return d, "gia' registrata"
 
+    trovati, gol_attesi, bonus = 0, 0, []
     for p in partite:
         if not p.get("id"):
             continue
-        # una chiamata per partita, con la pausa che il piano gratuito impone
         m = calendario.chiama(DETTAGLIO.format(id=p["id"]), timeout=timeout)
-        time.sleep(7)
-        for gol in (m.get("goals") or []):
+        time.sleep(7)          # il piano gratuito concede dieci chiamate al minuto
+        pieno = (m.get("score") or {}).get("fullTime") or {}
+        gol_attesi += (pieno.get("home") or 0) + (pieno.get("away") or 0)
+        elenco = m.get("goals") or []
+        trovati += len(elenco)
+        for gol in elenco:
             for chi, campo in ((gol.get("scorer"), "gol"), (gol.get("assist"), "assist")):
                 nome = _mio((chi or {}).get("name", ""))
                 if nome:
-                    voce = d["giocatori"].setdefault(nome, {"gol": 0, "assist": 0})
-                    voce[campo] += 1
+                    bonus.append((nome, campo))
 
-    # una giornata giocata per tutti quelli il cui club era in campo
+    if gol_attesi > 0 and trovati == 0:
+        return d, (f"il piano di football-data non espone i marcatori "
+                   f"({gol_attesi} gol nella giornata, nessuno elencato): giornata "
+                   f"NON registrata, restano valide le stime di rosa.py")
+
+    for nome, campo in bonus:
+        voce = d["giocatori"].setdefault(nome, {"gol": 0, "assist": 0})
+        voce[campo] += 1
     club_in_campo = {c.lower() for p in partite for c in (p["casa"], p["ospite"])}
     for ruolo, nome, club, *_ in rosa.GIOCATORI:
         if any(club.lower() in c or c in club.lower() for c in club_in_campo):
@@ -82,7 +98,7 @@ def registra(giornata: int, partite: list[dict], timeout: int = 20) -> dict:
 
     d["giornate"] = sorted(set(d["giornate"] + [giornata]))
     scrivi(d)
-    return d
+    return d, f"{len(bonus)} bonus dei tuoi su {trovati} gol totali"
 
 
 def stime(nome: str, gol90_iniziale: float, ass90_iniziale: float) -> tuple[float, float, str]:
