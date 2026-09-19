@@ -74,8 +74,10 @@ def calcola(correzioni: dict | None = None):
     try:
         stat_dati = voti.scarica()
         forze = voti.forza_squadre(stat_dati)
+        rig_veri = voti.rigoristi_osservati(stat_dati)
+        giocate = voti.giornate_giocate(stat_dati)
     except Exception as e:
-        stat_dati, forze = {}, {}
+        stat_dati, forze, rig_veri, giocate = {}, {}, {}, 0
         guasti.append(f"statistiche non raggiungibili ({type(e).__name__})")
 
     valutati, avvisi = [], []
@@ -116,6 +118,13 @@ def chiave_turno(r) -> str:
 def etichetta_turno(r) -> str:
     return (f"Giornata {r['giornata']}" if r.get("giornata")
             else f"Turno del {data_it(r['apertura']).split(' alle ')[0]}")
+
+
+def con_numero(r, st) -> dict:
+    """Attacca al turno il numero di giornata dal contatore interno."""
+    if r and not r.get("giornata"):
+        r["giornata"] = stato.numero_giornata(st, chiave_turno(r))
+    return r
 
 
 def undici_nomi(s) -> list[str]:
@@ -193,6 +202,7 @@ def modo_pre(st, forza=False):
     if r is None:
         return print("nessuna giornata in programma")
     chiave = chiave_turno(r)
+    r = con_numero(r, st)
     st = stato.allinea_giornata(st, chiave)
     adesso = dt.datetime.now(dt.timezone.utc)
 
@@ -303,7 +313,8 @@ def diagnosi():
 def modo_test():
     """Manda la formazione adesso, senza toccare la memoria del bot: si puo'
     usare a turno in corso per vedere com'e' fatto il messaggio."""
-    r = calcola(stato.leggi()["correzioni"])
+    st = stato.leggi()
+    r = con_numero(calcola(st["correzioni"]), st)
     if r is None:
         return print("nessuna giornata leggibile")
     invia("\u2699\ufe0f <b>MESSAGGIO DI PROVA</b> — non sostituisce quello "
