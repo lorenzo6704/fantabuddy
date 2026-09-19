@@ -264,6 +264,7 @@ def modo_ufficiali(st):
 
 def diagnosi():
     esiti = []
+    st_diag = stato.leggi()
     for v in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID"):
         ok = bool(os.environ.get(v))
         esiti.append((v, "presente" if ok else "MANCANTE", not ok))
