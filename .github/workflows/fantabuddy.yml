@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write     # per ricommittare stato.json e rendimento.json
+  contents: write     # per ricommittare stato.json
   actions: write      # per cancellare i giri vecchi
 
 jobs:
@@ -35,19 +35,14 @@ jobs:
       - name: correzioni dalle formazioni ufficiali
         run: python bot.py --ufficiali
 
-      # A turno concluso raccoglie gol e assist dei tuoi giocatori
-      - name: rendimento di fine giornata
-        continue-on-error: true
-        run: python bot.py --rendimento
-
       # Se questo passaggio non riesce, il bot dimentica cosa ha gia' mandato
       # e rischia di ripetersi: per questo stampa in chiaro com'e' andata.
-      - name: salva stato e rendimento
+      - name: salva lo stato
         if: always()
         run: |
           git config user.name  "fantabuddy"
           git config user.email "bot@users.noreply.github.com"
-          git add stato.json rendimento.json 2>/dev/null || true
+          git add stato.json 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "niente da salvare"
           elif git commit -q -m "stato $(date -u +%F_%H:%M)" && git push -q; then
