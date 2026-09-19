@@ -81,3 +81,46 @@ def cerca(dati: dict, cognome: str, club: str):
     larghi = [v for k, v in dati.items()
               if chiave in norm(v["nome"]) or norm(v["nome"]) in chiave]
     return max(larghi, key=lambda v: v["presenze"]) if larghi else None
+
+
+# --------------------------------------------------------- forza delle squadre
+# Dalla stessa pagina si ricava quanto ogni club segna e quanto subisce: basta
+# sommare i gol dei suoi giocatori e i gol subiti dai suoi portieri. Serve per
+# pesare l'avversario, che e' il fattore piu' importante per un portiere e conta
+# parecchio anche per gli attaccanti.
+
+def forza_squadre(dati: dict) -> dict[str, dict]:
+    club: dict[str, dict] = {}
+    for v in dati.values():
+        c = club.setdefault(v["club"], {"gol": 0, "subiti": 0, "pres_max": 0,
+                                        "pres_portieri": 0})
+        c["gol"] += v["gol"]
+        c["pres_max"] = max(c["pres_max"], v["presenze"])
+        if v["gol_subiti"] > 0 or v["rigori_parati"] > 0:
+            c["subiti"] += v["gol_subiti"]
+            c["pres_portieri"] += v["presenze"]
+
+    for c in club.values():
+        giornate = max(1, c["pres_max"])
+        c["fatti_pg"] = c["gol"] / giornate
+        c["subiti_pg"] = (c["subiti"] / c["pres_portieri"]) if c["pres_portieri"] else None
+
+    validi = [c["subiti_pg"] for c in club.values() if c["subiti_pg"] is not None]
+    media_gol = (sum(c["fatti_pg"] for c in club.values()) / len(club)) if club else 1.35
+    media_sub = (sum(validi) / len(validi)) if validi else 1.35
+    for c in club.values():
+        if c["subiti_pg"] is None:
+            c["subiti_pg"] = media_sub
+        c["attacco"] = c["fatti_pg"] / media_sub if media_sub else 1.0
+        c["difesa"] = c["subiti_pg"] / media_sub if media_sub else 1.0
+    return {"_media": {"gol_pg": media_gol, "subiti_pg": media_sub}, **club}
+
+
+def forza(f: dict, club: str) -> dict:
+    """Attacco e difesa di un club, 1.0 = media di lega."""
+    for k, v in f.items():
+        if k != "_media" and k.lower() == club.lower():
+            return v
+    return {"attacco": 1.0, "difesa": 1.0,
+            "fatti_pg": f.get("_media", {}).get("gol_pg", 1.35),
+            "subiti_pg": f.get("_media", {}).get("subiti_pg", 1.35)}
