@@ -49,7 +49,8 @@ secret**, con questi nomi esatti:
 |---|---|
 | `TELEGRAM_TOKEN` | il token di BotFather |
 | `TELEGRAM_CHAT_ID` | il numero del punto 2 |
-| `FOOTBALL_DATA_TOKEN` | la chiave di football-data.org |
+
+Sono due, non serve altro: il bot non usa nessuna API esterna con chiave.
 
 ## 6. Il file dell'automazione
 
@@ -70,9 +71,15 @@ Il passaggio **diagnosi** ti dice se i pezzi rispondono.
 
     P(gioca) x (voto base + bonus attesi + malus attesi)
 
+Calendario, probabili e statistiche vengono tutti da Fantacalcio.it: una fonte
+sola, e gli orari sono in fuso di Roma.
+
 - **P(gioca)**: la percentuale che Fantacalcio.it assegna a ogni giocatore
   nelle probabili formazioni. Chi non compare ne' fra i titolari ne' in
   panchina viene trattato come non convocato, non stimato a caso.
+- **Il calendario** viene dalla stessa pagina: contiene il numero di giornata,
+  la data e l'ora di ogni partita e le squadre accoppiate. Gli orari italiani
+  vengono convertiti in UTC. Nessuna API esterna, nessun token.
 - **Bonus attesi**: gol e assist per novanta minuti, dalle stime scritte in
   `rosa.py`, scalate per i minuti attesi e per il fattore campo.
 - **Rigori**: gerarchia dal dischetto per rigori attesi del club per tasso di
