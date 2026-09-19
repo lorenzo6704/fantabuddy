@@ -35,7 +35,7 @@ Su github.com: **+** → **New repository**, nome `fantabuddy`, lascialo
 **Public** (le password stanno nei Secrets, non nei file, e i repository
 pubblici hanno le automazioni gratuite senza limiti).
 
-## 4. Carica i dodici file
+## 4. Carica i dieci file
 
 **uploading an existing file**, trascinali tutti, **Commit changes**. Sono
 tutti allo stesso livello, non ci sono sottocartelle.
@@ -81,49 +81,33 @@ Il passaggio **diagnosi** ti dice se i pezzi rispondono.
 
 Poi prova tutti e sette i moduli e tiene quello col totale piu' alto.
 
-# Il rendimento si aggiorna da solo
+# Le statistiche si aggiornano da sole
 
-A turno concluso il bot chiede a football-data.org il dettaglio di ogni
-partita, estrae marcatori e assistman, e accumula i numeri in
-`rendimento.json`, che il workflow ricommitta nel repository.
+A ogni giro il bot legge la pagina delle statistiche di Fantacalcio.it, che
+pubblica per ogni calciatore presenze, media voto, fantamedia, gol, assist,
+rigori e cartellini. Da li' ricava tre cose che prima doveva stimare:
 
-Le stime di `rosa.py` restano come punto di partenza, ma pesano sempre meno:
-finche' le giornate sono poche domina la stima, dopo una decina di partite
-conta quasi solo quello che il giocatore fa in campo. Nel messaggio lo vedi
-scritto: *"2 gol e 1 assist in 3 giornate, pesati al 33%, quindi 0,56 gol e
-0,17 assist attesi ogni 90'"*.
+- la **media voto reale** al posto del 6.0 fisso;
+- i **gol per partita**, al posto di `gol90` in rosa.py;
+- gli **assist per partita**, al posto di `ass90`.
 
-Quindi `rosa.py` non va piu' ritoccato ogni settimana. Serve solo per i
-rigoristi, il regolamento e i trasferimenti.
+Finche' le presenze sono poche i valori di `rosa.py` pesano di piu'; dopo una
+decina di partite conta quasi solo il campo. Nel messaggio lo vedi scritto:
+*"1 gol e 2 assist in 3 presenze, media voto 6,50"*.
 
-**Cosa non si puo' avere: il fantavoto e la media voto.** Sono giudizi
-redazionali di Gazzetta e Fantacalcio.it, non dati pubblici, e nessuna fonte
-gratuita li espone. Il modello usa 6.0 come voto base e prevede i bonus, che
-sono la parte che sposta la classifica.
+Quindi `rosa.py` non va ritoccato ogni settimana. Serve per i rigoristi, il
+regolamento e i trasferimenti di gennaio.
 
 # Manutenzione
 
-- **`rig`** in `rosa.py`: posizione fra i rigoristi del club. Aggiornala
-  quando cambia, e' il parametro che pesa di piu'.
-- **`gol90` e `ass90`**: solo il punto di partenza. Dopo qualche giornata ci
-  pensa `rendimento.json`.
+- **`rig`** in `rosa.py`: posizione fra i rigoristi del club. Aggiornala quando
+  cambia, e' il parametro che pesa di piu' e nessuna fonte lo espone.
+- **`gol90` e `ass90`**: solo il punto di partenza, per i giocatori che non
+  hanno ancora presenze.
 - **Sezione regolamento**: di default il gol vale 3 per tutti i ruoli, come da
   Fantacalcio Classic. Se la tua lega differenzia (3 attaccante /
   3,5 centrocampista / 4 difensore) cambia il dizionario `GOL`.
   **Verificalo prima di fidarti del bot.**
-
-Dopo un trasferimento di gennaio, aggiorna nome e club.
-
-# Perche' non ci sono gli xG
-
-Understat e FBref, le due fonti gratuite di expected goals, rifiutano le
-richieste che arrivano dai datacenter, e i server di GitHub sono datacenter.
-Abbiamo provato l'accesso diretto e quattro ponti pubblici: tutti bloccati.
-Restavano solo servizi a pagamento o un account terzo con quota mensile, e
-abbiamo scelto di non aggiungere quella fragilita'.
-
-Quello che il bot ha in mano — chi gioca, con che percentuale, e chi tira i
-rigori — sono comunque i due fattori che pesano di piu' sul risultato.
 
 # Limiti da conoscere
 
