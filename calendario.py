@@ -1,143 +1,132 @@
-"""Calendario Serie A da football-data.org.
+"""Calendario di giornata, letto dalla pagina delle probabili di Fantacalcio.it.
 
-Due accortezze che servono davvero:
+La stessa pagina che da' le percentuali di titolarita' contiene anche numero di
+giornata, data, ora e squadre di ogni partita. Una fonte sola per tutto: meno
+pezzi, meno cose che possono rompersi.
 
-1. Il piano gratuito concede dieci richieste al minuto. Il workflow lancia
-   quattro comandi di fila e ognuno vorrebbe il calendario, quindi le risposte
-   vengono messe in cache su disco per mezz'ora e le chiamate rallentate
-   quando l'API segnala che il credito del minuto sta finendo.
-2. La giornata prossima viene cercata in una finestra di tre settimane invece
-   che su tutta la stagione: e' piu' leggero e non dipende da come l'API
-   etichetta le partite lontane.
+football-data.org resta come rete di sicurezza e si attiva solo se la lettura
+di Fantacalcio.it fallisce E il token e' configurato. Quando sarai sicuro che
+la fonte principale regge, puoi cancellare il secret FOOTBALL_DATA_TOKEN.
+
+Tutti gli orari sono in fuso di Roma.
 """
 from __future__ import annotations
 import datetime as dt
-import json, os, time
+import os, re
+from zoneinfo import ZoneInfo
 import requests
+from bs4 import BeautifulSoup
 
+ROMA = ZoneInfo("Europe/Rome")
+URL_FC = "https://www.fantacalcio.it/probabili-formazioni-serie-a"
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/126 Safari/537.36",
+      "Accept-Language": "it-IT,it;q=0.9"}
+
+MESI = {"gennaio": 1, "febbraio": 2, "marzo": 3, "aprile": 4, "maggio": 5,
+        "giugno": 6, "luglio": 7, "agosto": 8, "settembre": 9, "ottobre": 10,
+        "novembre": 11, "dicembre": 12}
+SQUADRE = ["Atalanta", "Bologna", "Cagliari", "Como", "Fiorentina", "Frosinone",
+           "Genoa", "Inter", "Juventus", "Lazio", "Lecce", "Milan", "Monza",
+           "Napoli", "Parma", "Roma", "Sassuolo", "Torino", "Udinese", "Venezia"]
+
+DATA = re.compile(r"(?:luned\u00ec|marted\u00ec|mercoled\u00ec|gioved\u00ec|venerd\u00ec|sabato|domenica)"
+                  r"\s+(\d{1,2})\s+(" + "|".join(MESI) + r")\s*,?\s*(\d{1,2})[:.](\d{2})",
+                  re.I)
+TEAM_MODULO = re.compile(r"\b(" + "|".join(SQUADRE) + r")\s+(\d-\d-\d(?:-\d)?)\b")
+GIORNATA = re.compile(r"(\d{1,2})\s*[\u00aa^]\s*Giornata", re.I)
+
+
+def ora_italiana(quando: dt.datetime) -> dt.datetime:
+    return quando.astimezone(ROMA)
+
+
+def _anno(mese: int, oggi: dt.date | None = None) -> int:
+    """La stagione va da agosto a maggio: da gennaio in poi siamo nell'anno dopo."""
+    oggi = oggi or dt.date.today()
+    inizio_stagione = oggi.year if oggi.month >= 7 else oggi.year - 1
+    return inizio_stagione if mese >= 7 else inizio_stagione + 1
+
+
+def testo_probabili(timeout: int = 25) -> str:
+    r = requests.get(URL_FC, headers=UA, timeout=timeout)
+    r.raise_for_status()
+    return BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True)
+
+
+def analizza(testo: str, oggi: dt.date | None = None):
+    """(giornata, [partite]) dalla pagina. Ogni data e' seguita dai due blocchi
+    squadra+modulo delle due formazioni."""
+    m = GIORNATA.search(testo)
+    giornata = int(m.group(1)) if m else None
+
+    tagli = [(x.start(), x.end(), x) for x in DATA.finditer(testo)]
+    squadre = [(x.start(), x.group(1)) for x in TEAM_MODULO.finditer(testo)]
+    partite = []
+    for i, (inizio, fine, mm) in enumerate(tagli):
+        limite = tagli[i + 1][0] if i + 1 < len(tagli) else len(testo)
+        coinvolte = [nome for pos, nome in squadre if fine <= pos < limite]
+        if len(coinvolte) < 2:
+            continue
+        giorno, mese, ora, minuti = (int(mm.group(1)), MESI[mm.group(2).lower()],
+                                     int(mm.group(3)), int(mm.group(4)))
+        quando = dt.datetime(_anno(mese, oggi), mese, giorno, ora, minuti, tzinfo=ROMA)
+        partite.append({"inizio": quando, "casa": coinvolte[0], "ospite": coinvolte[1],
+                        "stato": "TIMED", "giornata": giornata})
+    partite.sort(key=lambda p: p["inizio"])
+    return giornata, partite
+
+
+# ------------------------------------------------- rete di sicurezza opzionale
 API = "https://api.football-data.org/v4/competitions/SA/matches"
-CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache_calendario.json")
-TTL = 1800          # mezz'ora
-_memoria: dict[str, list] = {}
 
 
-def _headers():
+def _da_football_data():
     tok = os.environ.get("FOOTBALL_DATA_TOKEN")
     if not tok:
-        raise RuntimeError("FOOTBALL_DATA_TOKEN mancante")
-    return {"X-Auth-Token": tok}
-
-
-def chiama(url: str, params: dict | None = None, timeout: int = 20, tentativi: int = 3):
-    """GET con rispetto del limite: se l'API dice che il minuto e' esaurito,
-    aspetta invece di schiantarsi."""
-    for n in range(tentativi):
-        r = requests.get(url, headers=_headers(), params=params, timeout=timeout)
-        if r.status_code == 429:
-            attesa = int(r.headers.get("X-RequestCounter-Reset", 0) or 0) + 2
-            time.sleep(min(70, max(10, attesa)))
-            continue
-        r.raise_for_status()
-        residue = r.headers.get("X-Requests-Available-Minute")
-        if residue is not None and residue.isdigit() and int(residue) <= 1:
-            time.sleep(8)      # lascia respirare il contatore
-        return r.json()
-    raise RuntimeError(f"football-data: limite di chiamate superato su {url}")
-
-
-def _cache_leggi(chiave: str):
-    if chiave in _memoria:
-        return _memoria[chiave]
-    if os.path.exists(CACHE):
-        try:
-            d = json.load(open(CACHE, encoding="utf-8"))
-            if d.get("chiave") == chiave and time.time() - d.get("quando", 0) < TTL:
-                return d["dati"]
-        except Exception:
-            pass
-    return None
-
-
-def _cache_scrivi(chiave: str, dati):
-    _memoria[chiave] = dati
-    try:
-        json.dump({"chiave": chiave, "quando": time.time(), "dati": dati},
-                  open(CACHE, "w", encoding="utf-8"))
-    except Exception:
-        pass
-
-
-def partite(da: dt.date | None = None, a: dt.date | None = None) -> list[dict]:
-    """Partite fra due date. Senza argomenti: da ieri a tre settimane avanti."""
+        raise RuntimeError("nessuna fonte di calendario disponibile")
     oggi = dt.date.today()
-    da = da or oggi - dt.timedelta(days=8)
-    a = a or oggi + dt.timedelta(days=21)
-    chiave = f"{da}_{a}"
-
-    grezzo = _cache_leggi(chiave)
-    if grezzo is None:
-        grezzo = chiama(API, {"dateFrom": da.isoformat(), "dateTo": a.isoformat()})
-        _cache_scrivi(chiave, grezzo)
-
-    out = []
-    for m in grezzo.get("matches", []):
-        out.append({
-            "id": m.get("id"),
-            "giornata": m.get("matchday"),
-            "stato": m.get("status"),
-            "inizio": dt.datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00")),
+    r = requests.get(API, headers={"X-Auth-Token": tok},
+                     params={"dateFrom": (oggi - dt.timedelta(days=8)).isoformat(),
+                             "dateTo": (oggi + dt.timedelta(days=21)).isoformat()},
+                     timeout=20)
+    r.raise_for_status()
+    fuori = []
+    for m in r.json().get("matches", []):
+        fuori.append({
+            "giornata": m.get("matchday"), "stato": m.get("status"),
+            "inizio": dt.datetime.fromisoformat(
+                m["utcDate"].replace("Z", "+00:00")).astimezone(ROMA),
             "casa": m["homeTeam"]["shortName"] or m["homeTeam"]["name"],
-            "ospite": m["awayTeam"]["shortName"] or m["awayTeam"]["name"],
-        })
-    return out
+            "ospite": m["awayTeam"]["shortName"] or m["awayTeam"]["name"]})
+    if not fuori:
+        raise RuntimeError("football-data non ha restituito partite")
+    g = min(p["giornata"] for p in fuori
+            if p["giornata"] and p["stato"] in ("SCHEDULED", "TIMED"))
+    return g, sorted([p for p in fuori if p["giornata"] == g],
+                     key=lambda p: p["inizio"])
 
 
 def prossima_giornata(adesso: dt.datetime | None = None):
-    """(giornata, kickoff_di_apertura, [tutte le partite del turno]).
+    """(giornata, kickoff di apertura, [tutte le partite del turno]).
 
-    Il turno restituito comprende anche le partite gia' giocate: la formazione
-    si blocca al primo fischio del turno, non al prossimo match rimasto.
+    Il turno comprende anche le partite gia' giocate: la formazione si blocca
+    al primo fischio del turno, non al prossimo match rimasto.
     """
-    adesso = adesso or dt.datetime.now(dt.timezone.utc)
-    tutte = partite()
-    future = [p for p in tutte if p["inizio"] > adesso
-              and p["stato"] in ("SCHEDULED", "TIMED")]
-    if not future:
-        # finestra piu' larga: sosta lunga per le nazionali
-        tutte = partite(a=dt.date.today() + dt.timedelta(days=60))
-        future = [p for p in tutte if p["inizio"] > adesso
-                  and p["stato"] in ("SCHEDULED", "TIMED")]
-        if not future:
-            return None
-    g = min(p["giornata"] for p in future if p["giornata"] is not None)
-    turno = sorted([p for p in tutte if p["giornata"] == g], key=lambda p: p["inizio"])
-    return g, turno[0]["inizio"], turno
-
-
-def giornate_concluse(giorni_indietro: int = 90) -> list[tuple[int, list[dict]]]:
-    """Tutte le giornate con ogni partita finita, dalla piu' vecchia.
-
-    La finestra larga serve a recuperare anche i turni giocati prima che il
-    bot esistesse: l'archivio dei bonus si costruisce all'indietro, una
-    giornata per giro, senza sfondare il limite di chiamate.
-    """
-    tutte = partite(da=dt.date.today() - dt.timedelta(days=giorni_indietro))
-    per_giornata: dict[int, list[dict]] = {}
-    for p in tutte:
-        if p["giornata"]:
-            per_giornata.setdefault(p["giornata"], []).append(p)
-    out = []
-    for g in sorted(per_giornata):
-        gare = per_giornata[g]
-        if gare and all(x["stato"] == "FINISHED" for x in gare):
-            out.append((g, gare))
-    return out
-
-
-def giornata_conclusa(adesso: dt.datetime | None = None):
-    """L'ultima giornata completa."""
-    tutte = giornate_concluse()
-    return tutte[-1] if tutte else None
+    fonte = "Fantacalcio.it"
+    try:
+        giornata, partite = analizza(testo_probabili())
+        if not partite:
+            raise RuntimeError("nessuna partita riconosciuta nella pagina")
+    except Exception:
+        giornata, partite = _da_football_data()
+        fonte = "football-data"
+    if not partite:
+        return None
+    partite.sort(key=lambda p: p["inizio"])
+    for p in partite:
+        p.setdefault("fonte", fonte)
+    return giornata, partite[0]["inizio"], partite
 
 
 def avversario(club: str, turno: list[dict]) -> tuple[str, bool] | None:
@@ -150,15 +139,9 @@ def avversario(club: str, turno: list[dict]) -> tuple[str, bool] | None:
 
 
 def radiografia() -> str:
-    """Per la diagnosi: che cosa restituisce davvero l'API."""
-    tutte = partite()
-    per_stato: dict[str, int] = {}
-    for p in tutte:
-        per_stato[p["stato"]] = per_stato.get(p["stato"], 0) + 1
-    prossime = sorted([p for p in tutte if p["inizio"] > dt.datetime.now(dt.timezone.utc)],
-                      key=lambda p: p["inizio"])[:4]
-    righe = [f"{len(tutte)} partite in finestra, stati: {per_stato}"]
-    for p in prossime:
-        righe.append(f"    g{p['giornata']} {p['inizio']:%d/%m %H:%M} "
-                     f"{p['casa']}-{p['ospite']} [{p['stato']}]")
+    g, ap, turno = prossima_giornata()
+    righe = [f"giornata {g} da {turno[0].get('fonte', '?')}, {len(turno)} partite"]
+    for p in turno[:4]:
+        righe.append(f"    {ora_italiana(p['inizio']):%a %d/%m %H:%M} "
+                     f"{p['casa']}-{p['ospite']}")
     return "\n".join(righe)
