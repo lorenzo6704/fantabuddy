@@ -34,10 +34,25 @@ DATA = re.compile(r"(?:luned\u00ec|marted\u00ec|mercoled\u00ec|gioved\u00ec|vene
                   r"\s+(\d{1,2})\s+(" + "|".join(MESI) + r")\s*,?\s*(\d{1,2})[:.](\d{2})",
                   re.I)
 TEAM_MODULO = re.compile(r"\b(" + "|".join(SQUADRE) + r")\s+(\d-\d-\d(?:-\d)?)\b")
-# Il numero va preso dal titolo della pagina: nelle notizie in cima compaiono
-# altre giornate ("la top 3 della 4^ giornata") e la prima occorrenza sbaglia.
-GIORNATA = re.compile(r"Probabili\s+Formazioni[^\n]{0,80}?(\d{1,2})\s*[\u00aa\u00b0a^]\s*Giornata",
-                      re.I)
+# Il numero di giornata serve solo a scriverlo nel messaggio: non e' piu' la
+# chiave con cui il bot ricorda cosa ha mandato (quella e' la data di apertura
+# del turno, che non puo' sbagliare). Proviamo le forme note, dando la
+# precedenza a quella piu' vicina al titolo.
+GIORNATE = [
+    re.compile(r"Probabili\s+Formazioni.{0,120}?(\d{1,2})\s*[\u00aa\u00b0\u00ba^a]?\s*Giornata", re.I | re.S),
+    re.compile(r"(\d{1,2})\s*[\u00aa\u00b0\u00ba^]\s*Giornata", re.I),
+    re.compile(r"Giornata\s*(?:n\.?\s*)?(\d{1,2})", re.I),
+]
+
+
+def numero_giornata(testo: str) -> int | None:
+    testa = testo[:600]
+    for blocco in (testa, testo):
+        for pat in GIORNATE:
+            m = pat.search(blocco)
+            if m and 1 <= int(m.group(1)) <= 38:
+                return int(m.group(1))
+    return None
 
 
 def ora_italiana(quando: dt.datetime) -> dt.datetime:
@@ -60,8 +75,7 @@ def testo_probabili(timeout: int = 25) -> str:
 def analizza(testo: str, oggi: dt.date | None = None):
     """(giornata, [partite]) dalla pagina. Ogni data e' seguita dai due blocchi
     squadra+modulo delle due formazioni."""
-    m = GIORNATA.search(testo)
-    giornata = int(m.group(1)) if m else None
+    giornata = numero_giornata(testo)
 
     tagli = [(x.start(), x.end(), x) for x in DATA.finditer(testo)]
     squadre = [(x.start(), x.group(1)) for x in TEAM_MODULO.finditer(testo)]
@@ -162,8 +176,14 @@ def radiografia(t: dict | None = None) -> str:
     t = t or turno()
     if t is None:
         return "pagina illeggibile: nessuna partita trovata"
-    righe = [f"giornata {t['giornata']} da {t['fonte']}, {len(t['partite'])} partite, "
+    etichetta = f"giornata {t['giornata']}" if t["giornata"] else "giornata senza numero"
+    righe = [f"{etichetta} da {t['fonte']}, {len(t['partite'])} partite, "
              f"apertura {ora_italiana(t['apertura']):%a %d/%m %H:%M}"]
+    if not t["giornata"]:
+        try:
+            righe.append("    titolo pagina: " + testo_probabili()[:120])
+        except Exception:
+            pass
     for p in t["partite"][:4]:
         righe.append(f"    {ora_italiana(p['inizio']):%a %d/%m %H:%M} "
                      f"{p['casa']}-{p['ospite']}")
