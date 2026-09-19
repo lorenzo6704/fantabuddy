@@ -1,9 +1,8 @@
 """Rosa LOLLOC4 2026/27, regolamento e stime di rendimento.
 
-Senza una fonte di xG raggiungibile, il rendimento offensivo di ogni giocatore
-sta qui: `gol90` e `ass90` sono i gol e gli assist attesi ogni novanta minuti.
-Sono stime iniziali, da correggere quando la stagione dice qualcosa di diverso:
-bastano dieci secondi e valgono piu' di qualunque automatismo.
+`gol90` e `ass90` sono i gol e gli assist attesi ogni novanta minuti. Servono
+solo come punto di partenza: appena il giocatore accumula presenze, il bot li
+sostituisce con i numeri veri presi dalle statistiche di Fantacalcio.it.
 
 `rig` = posizione nella gerarchia dei rigoristi del club (1 = primo tiratore,
 0 = non tira). E' il parametro che sposta di piu' il risultato: tienilo
