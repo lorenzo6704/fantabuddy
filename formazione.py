@@ -12,15 +12,20 @@ def scegli(valutati: list[dict]) -> dict:
 
     migliore = None
     for nome_mod, (nd, nc, na) in rosa.MODULI.items():
-        if len(per_ruolo["D"]) < nd or len(per_ruolo["C"]) < nc or len(per_ruolo["A"]) < na:
-            continue
+        completo = (len(per_ruolo["D"]) >= nd and len(per_ruolo["C"]) >= nc
+                    and len(per_ruolo["A"]) >= na)
         undici = per_ruolo["D"][:nd] + per_ruolo["C"][:nc] + per_ruolo["A"][:na]
+        # Se un modulo non si riempie (rinvii, turni spezzati) non lo scartiamo:
+        # meglio dare la formazione migliore possibile e dire che e' incompleta.
         tot = (portiere["val"] if portiere else 0) + sum(v["val"] for v in undici)
-        if migliore is None or tot > migliore["totale"]:
-            migliore = {"modulo": nome_mod, "undici": undici,
-                        "portiere": portiere, "totale": tot}
-    if migliore is None:
-        raise RuntimeError("troppi pochi giocatori per completare un modulo")
+        voto = (tot, completo, len(undici))
+        if migliore is None or voto > migliore["_voto"]:
+            migliore = {"modulo": nome_mod, "undici": undici, "portiere": portiere,
+                        "totale": tot, "completo": completo, "_voto": voto,
+                        "mancano": max(0, (nd + nc + na) - len(undici))}
+    if migliore is None or not migliore["undici"]:
+        raise RuntimeError("nessun tuo giocatore scende in campo in questo turno")
+    migliore.pop("_voto")
 
     dentro = {id(v) for v in migliore["undici"]}
     if portiere:
