@@ -1,1 +1,10 @@
-{"offset": 0, "giornata": null, "correzioni": {}, "inviate": [], "ultimo_undici": [], "chiuso": false}
+{
+ "offset": 0,
+ "giornata": null,
+ "correzioni": {},
+ "inviate": [],
+ "ultimo_undici": [],
+ "chiuso": false,
+ "numero_giornata": 5,
+ "numero_riferito_a": "2026-09-18"
+}
