@@ -52,11 +52,10 @@ def motivazione(v: dict) -> str:
             pezzi.append(f"{'secondo' if rig == 2 else 'terzo'} dal dischetto")
         fonte = d.get("fonte_rend", "stima iniziale")
         if fonte == "stima iniziale":
-            pezzi.append(f"attesi {d['gol90']:.2f} gol e {d['ass90']:.2f} assist "
-                         f"ogni 90' (stima di partenza)")
+            pezzi.append(f"nessuna presenza ancora, stima di partenza "
+                         f"{d['gol90']:.2f} gol e {d['ass90']:.2f} assist")
         else:
-            pezzi.append(f"{fonte}, quindi {d['gol90']:.2f} gol e "
-                         f"{d['ass90']:.2f} assist attesi ogni 90'")
+            pezzi.append(fonte)
     dove = "in casa" if d["casa"] else "in trasferta"
     pezzi.append(f"{dove} contro {v['avv']}")
     t = "; ".join(pezzi)
