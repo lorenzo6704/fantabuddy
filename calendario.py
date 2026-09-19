@@ -107,26 +107,43 @@ def _da_football_data():
                      key=lambda p: p["inizio"])
 
 
-def prossima_giornata(adesso: dt.datetime | None = None):
-    """(giornata, kickoff di apertura, [tutte le partite del turno]).
+CODA_TURNO = dt.timedelta(hours=3)      # quanto dura l'ultima partita del turno
 
-    Il turno comprende anche le partite gia' giocate: la formazione si blocca
-    al primo fischio del turno, non al prossimo match rimasto.
+
+def turno(pagina: str | None = None, adesso: dt.datetime | None = None):
+    """Il turno da giocare, letto dalla pagina delle probabili.
+
+    `pagina` e' il testo gia' scaricato: passandolo si evita di scaricare due
+    volte la stessa pagina. Ritorna un dizionario con giornata, partite,
+    apertura e fine del turno, tutti in ora di Roma, oppure None se non si
+    riesce a leggere nulla.
     """
     fonte = "Fantacalcio.it"
     try:
-        giornata, partite = analizza(testo_probabili())
+        testo = pagina if pagina is not None else testo_probabili()
+        giornata, partite = analizza(testo)
         if not partite:
             raise RuntimeError("nessuna partita riconosciuta nella pagina")
     except Exception:
-        giornata, partite = _da_football_data()
-        fonte = "football-data"
+        try:
+            giornata, partite = _da_football_data()
+            fonte = "football-data"
+        except Exception:
+            return None
     if not partite:
         return None
     partite.sort(key=lambda p: p["inizio"])
     for p in partite:
         p.setdefault("fonte", fonte)
-    return giornata, partite[0]["inizio"], partite
+    return {"giornata": giornata, "partite": partite, "fonte": fonte,
+            "apertura": partite[0]["inizio"],
+            "fine": partite[-1]["inizio"] + CODA_TURNO}
+
+
+def prossima_giornata(adesso: dt.datetime | None = None):
+    """Vecchia forma, tenuta per compatibilita': (giornata, apertura, partite)."""
+    t = turno(adesso=adesso)
+    return None if t is None else (t["giornata"], t["apertura"], t["partite"])
 
 
 def avversario(club: str, turno: list[dict]) -> tuple[str, bool] | None:
@@ -138,10 +155,13 @@ def avversario(club: str, turno: list[dict]) -> tuple[str, bool] | None:
     return None
 
 
-def radiografia() -> str:
-    g, ap, turno = prossima_giornata()
-    righe = [f"giornata {g} da {turno[0].get('fonte', '?')}, {len(turno)} partite"]
-    for p in turno[:4]:
+def radiografia(t: dict | None = None) -> str:
+    t = t or turno()
+    if t is None:
+        return "pagina illeggibile: nessuna partita trovata"
+    righe = [f"giornata {t['giornata']} da {t['fonte']}, {len(t['partite'])} partite, "
+             f"apertura {ora_italiana(t['apertura']):%a %d/%m %H:%M}"]
+    for p in t["partite"][:4]:
         righe.append(f"    {ora_italiana(p['inizio']):%a %d/%m %H:%M} "
                      f"{p['casa']}-{p['ospite']}")
     return "\n".join(righe)
