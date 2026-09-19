@@ -14,6 +14,7 @@ segnalato come indisponibile invece che stimato, che e' l'informazione che
 serve davvero per non schierarlo.
 """
 from __future__ import annotations
+import datetime as dt
 import re, unicodedata
 import requests
 from bs4 import BeautifulSoup
@@ -28,9 +29,22 @@ SQUADRE = ["Atalanta", "Bologna", "Cagliari", "Como", "Fiorentina", "Frosinone",
            "Napoli", "Parma", "Roma", "Sassuolo", "Torino", "Udinese", "Venezia"]
 
 MODULO = r"\d-\d-\d(?:-\d)?"
+MESI = {"gennaio": 1, "febbraio": 2, "marzo": 3, "aprile": 4, "maggio": 5,
+        "giugno": 6, "luglio": 7, "agosto": 8, "settembre": 9, "ottobre": 10,
+        "novembre": 11, "dicembre": 12}
+GIORNI = "lunedi|martedi|mercoledi|giovedi|venerdi|sabato|domenica"
+DATA = re.compile(
+    r"(?:" + GIORNI + r")[\s,]+(\d{1,2})\s+(" + "|".join(MESI) + r")[\s,]+"
+    r"(\d{1,2})[:.](\d{2})", re.I)
+TITOLO_GIORNATA = re.compile(r"(\d{1,2})\s*[\u00aa\u00b0a]?\s*Giornata", re.I)
+STAGIONE = re.compile(r"(20\d{2})\s*/\s*(20\d{2})")
 INTESTAZIONE = re.compile(r"\b(" + "|".join(SQUADRE) + r")\s+(" + MODULO + r")\b")
 PERCENTUALE = re.compile(r"(\d{1,3})\s*%")
 FINE = re.compile(r"Ultimo aggiornamento|Presentazione squadre", re.I)
+
+
+def _senza_accenti(s: str) -> str:
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
 
 
 def norm(s: str) -> str:
@@ -57,10 +71,14 @@ def _coppie(blocco: str) -> list[tuple[str, float, str]]:
     return fuori
 
 
-def scarica(timeout: int = 25) -> dict:
+def testo_pagina(timeout: int = 25) -> str:
     r = requests.get(URL, headers=UA, timeout=timeout)
     r.raise_for_status()
-    return analizza(BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True))
+    return BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True)
+
+
+def scarica(timeout: int = 25) -> dict:
+    return analizza(testo_pagina(timeout))
 
 
 def analizza(testo: str) -> dict:
@@ -85,6 +103,44 @@ def analizza(testo: str) -> dict:
         if re.search(r"formazione\s+ufficiale", blocco, re.I):
             sez["ufficiale"] = True
     return squadre
+
+
+def giornata(testo: str) -> int | None:
+    m = TITOLO_GIORNATA.search(testo[:600])
+    return int(m.group(1)) if m else None
+
+
+def partite(testo: str, fuso: str = "Europe/Rome") -> list[dict]:
+    """Ricava il turno dalla pagina: ogni data introduce una partita, e le due
+    squadre che seguono sono, in ordine, quella di casa e quella ospite."""
+    from zoneinfo import ZoneInfo
+    piano = _senza_accenti(testo)
+    m = STAGIONE.search(piano[:600])
+    anno_inizio = int(m.group(1)) if m else dt.date.today().year
+
+    eventi = []
+    for d in DATA.finditer(piano):
+        eventi.append(("data", d.start(), d.groups()))
+    for t in INTESTAZIONE.finditer(piano):
+        eventi.append(("club", t.start(), t.group(1)))
+    eventi.sort(key=lambda e: e[1])
+
+    out, in_corso = [], None
+    for tipo, _, dato in eventi:
+        if tipo == "data":
+            giorno, mese_nome, ora, minuto = dato
+            mese = MESI[mese_nome.lower()]
+            anno = anno_inizio if mese >= 7 else anno_inizio + 1
+            quando = dt.datetime(anno, mese, int(giorno), int(ora), int(minuto),
+                                 tzinfo=ZoneInfo(fuso)).astimezone(dt.timezone.utc)
+            in_corso = {"inizio": quando, "casa": None, "ospite": None}
+            out.append(in_corso)
+        elif in_corso is not None:
+            if in_corso["casa"] is None:
+                in_corso["casa"] = dato
+            elif in_corso["ospite"] is None:
+                in_corso["ospite"] = dato
+    return [p for p in out if p["casa"] and p["ospite"]]
 
 
 ORDINE = {"indisponibile": 0, "titolare": 1, "panchina": 2}
