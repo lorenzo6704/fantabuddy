@@ -38,21 +38,12 @@ TEAM_MODULO = re.compile(r"\b(" + "|".join(SQUADRE) + r")\s+(\d-\d-\d(?:-\d)?)\b
 # chiave con cui il bot ricorda cosa ha mandato (quella e' la data di apertura
 # del turno, che non puo' sbagliare). Proviamo le forme note, dando la
 # precedenza a quella piu' vicina al titolo.
-GIORNATE = [
-    re.compile(r"Probabili\s+Formazioni.{0,120}?(\d{1,2})\s*[\u00aa\u00b0\u00ba^a]?\s*Giornata", re.I | re.S),
-    re.compile(r"(\d{1,2})\s*[\u00aa\u00b0\u00ba^]\s*Giornata", re.I),
-    re.compile(r"Giornata\s*(?:n\.?\s*)?(\d{1,2})", re.I),
-]
-
-
-def numero_giornata(testo: str) -> int | None:
-    testa = testo[:600]
-    for blocco in (testa, testo):
-        for pat in GIORNATE:
-            m = pat.search(blocco)
-            if m and 1 <= int(m.group(1)) <= 38:
-                return int(m.group(1))
-    return None
+# Il numero di giornata NON si legge piu' dal testo della pagina: in cima ci
+# sono notizie che citano altre giornate ("la top 3 della 4^ giornata") e ogni
+# tentativo di indovinarlo ha sbagliato. Si chiede al calendario, che lo sa.
+# Se non e' disponibile, il messaggio usa la data del turno: piu' lunga da
+# leggere ma impossibile da sbagliare.
+_memo_numero: dict[str, int | None] = {}
 
 
 def ora_italiana(quando: dt.datetime) -> dt.datetime:
@@ -62,8 +53,25 @@ def ora_italiana(quando: dt.datetime) -> dt.datetime:
 def _anno(mese: int, oggi: dt.date | None = None) -> int:
     """La stagione va da agosto a maggio: da gennaio in poi siamo nell'anno dopo."""
     oggi = oggi or dt.date.today()
-    inizio_stagione = oggi.year if oggi.month >= 7 else oggi.year - 1
-    return inizio_stagione if mese >= 7 else inizio_stagione + 1
+    inizio = oggi.year if oggi.month >= 7 else oggi.year - 1
+    return inizio if mese >= 7 else inizio + 1
+
+
+def numero_da_calendario(apertura: dt.datetime) -> int | None:
+    """Il numero di giornata del turno che si apre in quella data."""
+    chiave = apertura.date().isoformat()
+    if chiave in _memo_numero:
+        return _memo_numero[chiave]
+    numero = None
+    try:
+        for p in _partite_football_data():
+            if p["inizio"].astimezone(ROMA).date() == apertura.astimezone(ROMA).date():
+                numero = p["giornata"]
+                break
+    except Exception:
+        numero = None
+    _memo_numero[chiave] = numero
+    return numero
 
 
 def testo_probabili(timeout: int = 25) -> str:
@@ -75,7 +83,7 @@ def testo_probabili(timeout: int = 25) -> str:
 def analizza(testo: str, oggi: dt.date | None = None):
     """(giornata, [partite]) dalla pagina. Ogni data e' seguita dai due blocchi
     squadra+modulo delle due formazioni."""
-    giornata = numero_giornata(testo)
+    giornata = None
 
     tagli = [(x.start(), x.end(), x) for x in DATA.finditer(testo)]
     squadre = [(x.start(), x.group(1)) for x in TEAM_MODULO.finditer(testo)]
@@ -98,7 +106,7 @@ def analizza(testo: str, oggi: dt.date | None = None):
 API = "https://api.football-data.org/v4/competitions/SA/matches"
 
 
-def _da_football_data():
+def _partite_football_data():
     tok = os.environ.get("FOOTBALL_DATA_TOKEN")
     if not tok:
         raise RuntimeError("nessuna fonte di calendario disponibile")
@@ -118,6 +126,11 @@ def _da_football_data():
             "ospite": m["awayTeam"]["shortName"] or m["awayTeam"]["name"]})
     if not fuori:
         raise RuntimeError("football-data non ha restituito partite")
+    return fuori
+
+
+def _da_football_data():
+    fuori = _partite_football_data()
     g = min(p["giornata"] for p in fuori
             if p["giornata"] and p["stato"] in ("SCHEDULED", "TIMED"))
     return g, sorted([p for p in fuori if p["giornata"] == g],
@@ -152,6 +165,8 @@ def turno(pagina: str | None = None, adesso: dt.datetime | None = None):
     partite.sort(key=lambda p: p["inizio"])
     for p in partite:
         p.setdefault("fonte", fonte)
+    if giornata is None:
+        giornata = numero_da_calendario(partite[0]["inizio"])
     return {"giornata": giornata, "partite": partite, "fonte": fonte,
             "apertura": partite[0]["inizio"],
             "fine": partite[-1]["inizio"] + CODA_TURNO}
