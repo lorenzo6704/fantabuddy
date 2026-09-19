@@ -16,7 +16,7 @@ import argparse, datetime as dt, os, sys
 from zoneinfo import ZoneInfo
 import requests
 
-import rosa, modello, formazione, stato, calendario, probabili, voti
+import rosa, modello, formazione, stato, calendario, probabili, voti, punteggio
 
 ROMA = ZoneInfo("Europe/Rome")
 GIORNI = ["luned\u00ec","marted\u00ec","mercoled\u00ec","gioved\u00ec",
@@ -95,7 +95,7 @@ def calcola(correzioni: dict | None = None):
             avvisi.append(nome)
 
         val, det = modello.fantavoto_atteso(g, p, casa,
-                                            voti.cerca(stat_dati, nome, club))
+                                            voti.cerca(stat_dati, nome, club), st)
         det.update(stato=st, nota=nota)
         valutati.append({"g": g, "val": val, "det": det, "avv": avv, "casa": casa})
 
@@ -126,7 +126,9 @@ def undici_nomi(s) -> list[str]:
 def messaggio_completo(r) -> str:
     s = r["scelta"]
     out = [f"<b>{etichetta_turno(r)}</b> — primo match {data_it(r['apertura'])}",
-           f"Modulo: <b>{s['modulo']}</b> · {s['totale']:.1f} punti attesi", "",
+           f"Modulo: <b>{s['modulo']}</b> · "
+           f"<b>{s['gol_attesi']:.2f} gol attesi</b>", 
+           punteggio.dettaglio(s["totale"], s["scarto"]), "",
            "<b>FORMAZIONE</b>"]
     if not s.get("completo", True):
         out.append(f"⚠️ <b>Formazione incompleta</b>: mancano {s['mancano']} slot, "
@@ -162,7 +164,8 @@ def messaggio_correzione(r, prima: list[str], club: list[str]) -> str:
              f"\nSi chiude alle {r['apertura'].astimezone(ROMA):%H:%M}.")
     if not entrati and not usciti:
         return testa + "\n\nNessun cambio: la formazione che ti ho mandato regge."
-    out = [testa, "", f"Modulo: <b>{s['modulo']}</b> · {s['totale']:.1f} punti attesi", ""]
+    out = [testa, "", f"Modulo: <b>{s['modulo']}</b> · "
+           f"{s['gol_attesi']:.2f} gol attesi ({s['totale']:.1f} punti)", ""]
     for n in entrati:
         candidati = ([s["portiere"]] if s["portiere"] else []) + s["undici"]
         v = next(x for x in candidati if x["g"][1] == n)
