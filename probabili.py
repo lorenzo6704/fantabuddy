@@ -36,7 +36,10 @@ GIORNI = "lunedi|martedi|mercoledi|giovedi|venerdi|sabato|domenica"
 DATA = re.compile(
     r"(?:" + GIORNI + r")[\s,]+(\d{1,2})\s+(" + "|".join(MESI) + r")[\s,]+"
     r"(\d{1,2})[:.](\d{2})", re.I)
-TITOLO_GIORNATA = re.compile(r"(\d{1,2})\s*[\u00aa\u00b0a]?\s*Giornata", re.I)
+# Dal titolo, non dalla prima occorrenza: nelle notizie in cima alla pagina
+# compaiono altre giornate ("la top 3 della 4^ giornata").
+TITOLO_GIORNATA = re.compile(
+    r"Probabili\s+Formazioni[^\n]{0,80}?(\d{1,2})\s*[\u00aa\u00b0a^]\s*Giornata", re.I)
 STAGIONE = re.compile(r"(20\d{2})\s*/\s*(20\d{2})")
 INTESTAZIONE = re.compile(r"\b(" + "|".join(SQUADRE) + r")\s+(" + MODULO + r")\b")
 PERCENTUALE = re.compile(r"(\d{1,3})\s*%")
