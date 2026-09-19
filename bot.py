@@ -278,9 +278,20 @@ def diagnosi():
     return 0
 
 
+def modo_test():
+    """Manda la formazione adesso, senza toccare la memoria del bot: si puo'
+    usare a turno in corso per vedere com'e' fatto il messaggio."""
+    r = calcola(stato.leggi()["correzioni"])
+    if r is None:
+        return print("nessuna giornata leggibile")
+    invia("\u2699\ufe0f <b>MESSAGGIO DI PROVA</b> — non sostituisce quello "
+          "ufficiale\n\n" + messaggio_completo(r))
+    print(f"prova inviata per la giornata {r['giornata']}")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    for f in ("pre", "ufficiali", "prova", "ora", "diagnosi"):
+    for f in ("pre", "ufficiali", "prova", "ora", "diagnosi", "test"):
         ap.add_argument("--" + f, action="store_true")
     a = ap.parse_args()
     if a.diagnosi:
@@ -294,6 +305,8 @@ def main():
         for tag in ("<b>", "</b>", "<i>", "</i>"):
             t = t.replace(tag, "")
         return print(t)
+    if a.test:
+        return modo_test()
     if a.ora:
         return modo_pre(st, forza=True)
     if a.ufficiali:
