@@ -1,6 +1,7 @@
 """Sceglie modulo, undici e panchina, e scrive la motivazione di ogni scelta."""
 from __future__ import annotations
-import rosa
+import math
+import rosa, punteggio
 
 
 def scegli(valutati: list[dict]) -> dict:
@@ -17,11 +18,18 @@ def scegli(valutati: list[dict]) -> dict:
         undici = per_ruolo["D"][:nd] + per_ruolo["C"][:nc] + per_ruolo["A"][:na]
         # Se un modulo non si riempie (rinvii, turni spezzati) non lo scartiamo:
         # meglio dare la formazione migliore possibile e dire che e' incompleta.
-        tot = (portiere["val"] if portiere else 0) + sum(v["val"] for v in undici)
-        voto = (tot, completo, len(undici))
+        in_campo = ([portiere] if portiere else []) + undici
+        tot = sum(v["val"] for v in in_campo)
+        var = sum(v["det"].get("varianza", 1.0) for v in in_campo)
+        sd = math.sqrt(var)
+        # La lega paga a soglie di gol, non a punti: scegliamo il modulo che
+        # massimizza i GOL attesi, che tiene conto anche della volatilita'.
+        gol = punteggio.gol_attesi(tot, sd)
+        voto = (gol, completo, len(undici))
         if migliore is None or voto > migliore["_voto"]:
             migliore = {"modulo": nome_mod, "undici": undici, "portiere": portiere,
-                        "totale": tot, "completo": completo, "_voto": voto,
+                        "totale": tot, "scarto": sd, "gol_attesi": gol,
+                        "completo": completo, "_voto": voto,
                         "mancano": max(0, (nd + nc + na) - len(undici))}
     if migliore is None or not migliore["undici"]:
         raise RuntimeError("nessun tuo giocatore scende in campo in questo turno")
@@ -41,16 +49,20 @@ def motivazione(v: dict) -> str:
     p, stato = d["prob"], d.get("stato", "")
     pezzi = []
 
+    pv, minuti = d.get("p_voto", 0), d.get("minuti", 0)
     if stato == "non convocato":
         pezzi.append("non compare fra titolari e panchina: non convocato")
     elif p >= 0.85:
-        pezzi.append(f"titolare al {int(p*100)}% nelle probabili")
-    elif p >= 0.6:
-        pezzi.append(f"probabile titolare ({int(p*100)}%)")
+        pezzi.append(f"titolare al {int(p*100)}%")
+    elif p >= rosa.SOGLIA_TITOLARE:
+        pezzi.append(f"titolare ({int(p*100)}%)")
     elif p >= 0.35:
-        pezzi.append(f"in ballottaggio ({int(p*100)}%)")
+        pezzi.append(f"ballottaggio al {int(p*100)}%, ma il voto lo prende "
+                     f"nel {int(pv*100)}% dei casi")
     else:
-        pezzi.append(f"dato in panchina ({int(p*100)}%)")
+        pezzi.append(f"panchina ({int(p*100)}%), voto probabile al {int(pv*100)}%")
+    if 0 < minuti < 0.75:
+        pezzi.append(f"circa {int(minuti*90)}' attesi, quindi meno occasioni da bonus")
 
     if ruolo != "P":
         if rig == 1:
