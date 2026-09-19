@@ -13,16 +13,26 @@ Per provarlo:  --prova (stampa)   --ora (manda subito)   --diagnosi
 """
 from __future__ import annotations
 import argparse, datetime as dt, os, sys
+from zoneinfo import ZoneInfo
 import requests
 
 import rosa, modello, formazione, stato, calendario, probabili, voti
+
+ROMA = ZoneInfo("Europe/Rome")
+GIORNI = ["luned\u00ec","marted\u00ec","mercoled\u00ec","gioved\u00ec",
+          "venerd\u00ec","sabato","domenica"]
+
+
+def data_it(quando) -> str:
+    q = quando.astimezone(ROMA)
+    return f"{GIORNI[q.weekday()]} {q:%d/%m alle %H:%M}"
+
 
 ORE_PRIMA = 6          # manda appena il primo match e' piu' vicino di cosi'
 # Niente finestra: i cron di GitHub slittano e possono saltare del tutto.
 # Meglio un messaggio in ritardo di mezz'ora che un messaggio mai arrivato:
 # la condizione e' "mancano meno di ORE_PRIMA e non l'ho ancora mandato".
 ANTICIPO_UFFICIALI = 100     # minuti prima del via in cui cercare le ufficiali
-CODA_TURNO = dt.timedelta(hours=3)   # quanto dura l'ultima partita
 
 
 def invia(testo: str):
@@ -45,20 +55,22 @@ def _spezza(t: str, n: int):
 
 # ------------------------------------------------------------------- calcolo
 def calcola(correzioni: dict | None = None):
+    """Legge una volta sola la pagina delle probabili: da li' ricava sia il
+    turno (giornata, partite, orari) sia le percentuali di titolarita'."""
     correzioni = correzioni or {}
-    info = calendario.prossima_giornata()
-    if info is None:
+    try:
+        pagina = probabili.testo_pagina()
+    except Exception as e:
+        raise RuntimeError(f"pagina delle probabili non raggiungibile: {e}") from e
+
+    t = calendario.turno(pagina)
+    if t is None:
         return None
-    g_num, _, turno = info
-    apertura = min(p["inizio"] for p in turno)
-    fine = max(p["inizio"] for p in turno) + CODA_TURNO
+    g_num, turno = t["giornata"], t["partite"]
+    apertura, fine_turno = t["apertura"], t["fine"]
+    prob_dati = probabili.analizza(pagina)
 
     guasti = []
-    try:
-        prob_dati = probabili.scarica()
-    except Exception as e:
-        prob_dati = {}
-        guasti.append(f"probabili formazioni non raggiungibili ({type(e).__name__})")
     try:
         stat_dati = voti.scarica()
     except Exception as e:
@@ -87,9 +99,9 @@ def calcola(correzioni: dict | None = None):
         det.update(stato=st, nota=nota)
         valutati.append({"g": g, "val": val, "det": det, "avv": avv, "casa": casa})
 
-    return {"giornata": g_num, "apertura": apertura, "fine": fine, "turno": turno,
-            "scelta": formazione.scegli(valutati), "avvisi": avvisi,
-            "prob_dati": prob_dati, "guasti": guasti}
+    return {"giornata": g_num, "apertura": apertura, "fine": fine_turno,
+            "turno": turno, "scelta": formazione.scegli(valutati),
+            "avvisi": avvisi, "prob_dati": prob_dati, "guasti": guasti}
 
 
 def undici_nomi(s) -> list[str]:
@@ -99,8 +111,7 @@ def undici_nomi(s) -> list[str]:
 # ------------------------------------------------------------------ messaggi
 def messaggio_completo(r) -> str:
     s = r["scelta"]
-    out = [f"<b>Giornata {r['giornata']}</b> — primo match "
-           f"{r['apertura'].astimezone():%d/%m alle %H:%M}",
+    out = [f"<b>Giornata {r['giornata']}</b> — primo match {data_it(r['apertura'])}",
            f"Modulo: <b>{s['modulo']}</b> · {s['totale']:.1f} punti attesi", "",
            "<b>FORMAZIONE</b>"]
     for v in [s["portiere"]] + s["undici"]:
@@ -127,7 +138,7 @@ def messaggio_correzione(r, prima: list[str], club: list[str]) -> str:
     entrati = [n for n in dopo if n not in prima]
     usciti = [n for n in prima if n not in dopo]
     testa = ("<b>Formazioni ufficiali</b> — " + ", ".join(club) +
-             f"\nSi chiude alle {r['apertura'].astimezone():%H:%M}.")
+             f"\nSi chiude alle {r['apertura'].astimezone(ROMA):%H:%M}.")
     if not entrati and not usciti:
         return testa + "\n\nNessun cambio: la formazione che ti ho mandato regge."
     out = [testa, "", f"Modulo: <b>{s['modulo']}</b> · {s['totale']:.1f} punti attesi", ""]
@@ -158,7 +169,7 @@ def modo_pre(st, forza=False):
 
     if turno_in_corso(r, adesso) and not forza:
         return print(f"giornata {r['giornata']} in corso: la formazione e' bloccata, "
-                     f"riprendo dopo {r['fine']:%d/%m %H:%M} UTC")
+                     f"riprendo dopo {data_it(r['fine'])}")
 
     ore = (r["apertura"] - adesso).total_seconds() / 3600
     if forza or (ore <= ORE_PRIMA and r["giornata"] not in st["inviate"]):
@@ -214,7 +225,7 @@ def modo_ufficiali(st):
 
 def diagnosi():
     esiti = []
-    for v in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID", "FOOTBALL_DATA_TOKEN"):
+    for v in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID"):
         ok = bool(os.environ.get(v))
         esiti.append((v, "presente" if ok else "MANCANTE", not ok))
     try:
@@ -225,11 +236,12 @@ def diagnosi():
     except Exception as e:
         esiti.append(("Telegram", f"ERRORE {type(e).__name__}: {e}", True))
     try:
-        g, _, turno = calendario.prossima_giornata()
-        ap = min(p["inizio"] for p in turno)
-        esiti.append(("Calendario", f"giornata {g}, apertura {ap:%d/%m %H:%M} UTC, "
-                                    f"{len(turno)} partite", False))
-        print("  ...", calendario.radiografia())
+        t = calendario.turno()
+        if t is None:
+            esiti.append(("Calendario", "pagina illeggibile: nessuna partita trovata", True))
+        else:
+            esiti.append(("Calendario", calendario.radiografia(t).split("\n")[0], False))
+            print("  ...", calendario.radiografia(t))
     except Exception as e:
         esiti.append(("Calendario", f"ERRORE {type(e).__name__}: {e}", True))
     try:
