@@ -34,7 +34,10 @@ DATA = re.compile(r"(?:luned\u00ec|marted\u00ec|mercoled\u00ec|gioved\u00ec|vene
                   r"\s+(\d{1,2})\s+(" + "|".join(MESI) + r")\s*,?\s*(\d{1,2})[:.](\d{2})",
                   re.I)
 TEAM_MODULO = re.compile(r"\b(" + "|".join(SQUADRE) + r")\s+(\d-\d-\d(?:-\d)?)\b")
-GIORNATA = re.compile(r"(\d{1,2})\s*[\u00aa^]\s*Giornata", re.I)
+# Il numero va preso dal titolo della pagina: nelle notizie in cima compaiono
+# altre giornate ("la top 3 della 4^ giornata") e la prima occorrenza sbaglia.
+GIORNATA = re.compile(r"Probabili\s+Formazioni[^\n]{0,80}?(\d{1,2})\s*[\u00aa\u00b0a^]\s*Giornata",
+                      re.I)
 
 
 def ora_italiana(quando: dt.datetime) -> dt.datetime:
