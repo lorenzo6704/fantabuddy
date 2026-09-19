@@ -6,23 +6,25 @@ import rosa
 def scegli(valutati: list[dict]) -> dict:
     per_ruolo = {r: sorted([v for v in valutati if v["g"][0] == r],
                            key=lambda v: -v["val"]) for r in "PDCA"}
-    if not per_ruolo["P"]:
-        raise RuntimeError("nessun portiere disponibile in questa giornata")
-    portiere = per_ruolo["P"][0]
+    # Puo' capitare che nessuno dei tre portieri giochi (rinvii, soste
+    # spezzate). Non e' un motivo per non dare il resto della formazione.
+    portiere = per_ruolo["P"][0] if per_ruolo["P"] else None
 
     migliore = None
     for nome_mod, (nd, nc, na) in rosa.MODULI.items():
         if len(per_ruolo["D"]) < nd or len(per_ruolo["C"]) < nc or len(per_ruolo["A"]) < na:
             continue
         undici = per_ruolo["D"][:nd] + per_ruolo["C"][:nc] + per_ruolo["A"][:na]
-        tot = portiere["val"] + sum(v["val"] for v in undici)
+        tot = (portiere["val"] if portiere else 0) + sum(v["val"] for v in undici)
         if migliore is None or tot > migliore["totale"]:
             migliore = {"modulo": nome_mod, "undici": undici,
                         "portiere": portiere, "totale": tot}
     if migliore is None:
         raise RuntimeError("troppi pochi giocatori per completare un modulo")
 
-    dentro = {id(v) for v in migliore["undici"]} | {id(portiere)}
+    dentro = {id(v) for v in migliore["undici"]}
+    if portiere:
+        dentro.add(id(portiere))
     migliore["panchina"] = sorted([v for v in valutati if id(v) not in dentro],
                                   key=lambda v: -v["val"])
     return migliore
