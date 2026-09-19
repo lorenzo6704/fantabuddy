@@ -73,8 +73,9 @@ def calcola(correzioni: dict | None = None):
     guasti = []
     try:
         stat_dati = voti.scarica()
+        forze = voti.forza_squadre(stat_dati)
     except Exception as e:
-        stat_dati = {}
+        stat_dati, forze = {}, {}
         guasti.append(f"statistiche non raggiungibili ({type(e).__name__})")
 
     valutati, avvisi = [], []
@@ -94,8 +95,10 @@ def calcola(correzioni: dict | None = None):
             p, st, nota = 0.5, "sconosciuto", ""
             avvisi.append(nome)
 
-        val, det = modello.fantavoto_atteso(g, p, casa,
-                                            voti.cerca(stat_dati, nome, club), st)
+        val, det = modello.fantavoto_atteso(
+            g, p, casa, voti.cerca(stat_dati, nome, club), st,
+            mia=voti.forza(forze, club) if forze else None,
+            avv=voti.forza(forze, avv) if forze else None)
         det.update(stato=st, nota=nota)
         valutati.append({"g": g, "val": val, "det": det, "avv": avv, "casa": casa})
 
