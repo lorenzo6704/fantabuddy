@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse, datetime as dt, os, sys
 import requests
 
-import rosa, modello, formazione, stato, calendario, probabili, rendimento, voti
+import rosa, modello, formazione, stato, calendario, probabili, voti
 
 ORE_PRIMA = 6          # manda appena il primo match e' piu' vicino di cosi'
 # Niente finestra: i cron di GitHub slittano e possono saltare del tutto.
@@ -59,6 +59,11 @@ def calcola(correzioni: dict | None = None):
     except Exception as e:
         prob_dati = {}
         guasti.append(f"probabili formazioni non raggiungibili ({type(e).__name__})")
+    try:
+        stat_dati = voti.scarica()
+    except Exception as e:
+        stat_dati = {}
+        guasti.append(f"statistiche non raggiungibili ({type(e).__name__})")
 
     valutati, avvisi = [], []
     for g in rosa.GIOCATORI:
@@ -77,7 +82,8 @@ def calcola(correzioni: dict | None = None):
             p, st, nota = 0.5, "sconosciuto", ""
             avvisi.append(nome)
 
-        val, det = modello.fantavoto_atteso(g, p, casa)
+        val, det = modello.fantavoto_atteso(g, p, casa,
+                                            voti.cerca(stat_dati, nome, club))
         det.update(stato=st, nota=nota)
         valutati.append({"g": g, "val": val, "det": det, "avv": avv, "casa": casa})
 
@@ -206,31 +212,6 @@ def modo_ufficiali(st):
     print("correzione inviata per: " + ", ".join(pronti))
 
 
-def modo_rendimento():
-    """Recupera i bonus delle giornate concluse, una per giro: cosi' si
-    riempiono anche i turni giocati prima che il bot esistesse, senza sfondare
-    il limite di chiamate del piano gratuito."""
-    concluse = calendario.giornate_concluse()
-    if not concluse:
-        return print("nessuna giornata conclusa da registrare")
-    archivio = rendimento.leggi()
-    mancanti = [(g, p) for g, p in concluse if g not in archivio["giornate"]]
-    if not mancanti:
-        return print(f"archivio aggiornato: giornate {archivio['giornate']}")
-
-    g, gare = mancanti[0]          # la piu' vecchia non ancora registrata
-    try:
-        d, nota = rendimento.registra(g, gare)
-    except Exception as e:
-        return print(f"raccolta rinviata al prossimo giro: {e}")
-
-    miei = {n: v for n, v in d["giocatori"].items() if v.get("gol") or v.get("assist")}
-    print(f"giornata {g}: {nota}")
-    print("  archivio: " + (", ".join(f"{k} {v['gol']}g {v['assist']}a"
-                                      for k, v in sorted(miei.items())) or "ancora vuoto"))
-    print(f"  registrate {d['giornate']} · mancano {len(mancanti) - 1} turni")
-
-
 def diagnosi():
     esiti = []
     for v in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID", "FOOTBALL_DATA_TOKEN"):
@@ -261,13 +242,13 @@ def diagnosi():
                                    f"nelle liste", n < 12))
     except Exception as e:
         esiti.append(("Probabili", f"ERRORE {type(e).__name__}: {e}", True))
-
     try:
-        print("\n--- sonda statistiche Fantacalcio.it ---")
-        print(voti.ispeziona())
-        print("--- fine sonda ---")
+        st = voti.scarica()
+        agganciati = sum(1 for g in rosa.GIOCATORI if voti.cerca(st, g[1], g[2]))
+        esiti.append(("Statistiche", f"{len(st)} calciatori, {agganciati}/25 tuoi "
+                                     f"agganciati", agganciati < 15))
     except Exception as e:
-        print("  sonda statistiche fallita:", e)
+        esiti.append(("Statistiche", f"ERRORE {type(e).__name__}: {e}", True))
 
     print("\n=== DIAGNOSI FANTABUDDY ===")
     for nome, msg, male in esiti:
@@ -280,13 +261,11 @@ def diagnosi():
 
 def main():
     ap = argparse.ArgumentParser()
-    for f in ("pre", "ufficiali", "prova", "ora", "diagnosi", "rendimento"):
+    for f in ("pre", "ufficiali", "prova", "ora", "diagnosi"):
         ap.add_argument("--" + f, action="store_true")
     a = ap.parse_args()
     if a.diagnosi:
         return diagnosi()
-    if a.rendimento:
-        return modo_rendimento()
     st = stato.leggi()
     if a.prova:
         r = calcola(st["correzioni"])
