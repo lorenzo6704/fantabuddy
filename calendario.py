@@ -169,14 +169,10 @@ def radiografia(t: dict | None = None) -> str:
     t = t or turno()
     if t is None:
         return "pagina illeggibile: nessuna partita trovata"
-    etichetta = f"giornata {t['giornata']}" if t["giornata"] else "giornata senza numero"
+    etichetta = (f"giornata {t['giornata']}" if t.get("giornata")
+                 else "numero da seminare in stato.json")
     righe = [f"{etichetta} da {t['fonte']}, {len(t['partite'])} partite, "
              f"apertura {ora_italiana(t['apertura']):%a %d/%m %H:%M}"]
-    if not t["giornata"]:
-        try:
-            righe.append("    titolo pagina: " + testo_probabili()[:120])
-        except Exception:
-            pass
     for p in t["partite"][:4]:
         righe.append(f"    {ora_italiana(p['inizio']):%a %d/%m %H:%M} "
                      f"{p['casa']}-{p['ospite']}")
