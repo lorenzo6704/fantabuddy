@@ -105,7 +105,10 @@ def calcola(correzioni: dict | None = None):
 
 
 def undici_nomi(s) -> list[str]:
-    return sorted([s["portiere"]["g"][1]] + [v["g"][1] for v in s["undici"]])
+    nomi = [v["g"][1] for v in s["undici"]]
+    if s["portiere"]:
+        nomi.append(s["portiere"]["g"][1])
+    return sorted(nomi)
 
 
 # ------------------------------------------------------------------ messaggi
@@ -114,7 +117,10 @@ def messaggio_completo(r) -> str:
     out = [f"<b>Giornata {r['giornata']}</b> — primo match {data_it(r['apertura'])}",
            f"Modulo: <b>{s['modulo']}</b> · {s['totale']:.1f} punti attesi", "",
            "<b>FORMAZIONE</b>"]
-    for v in [s["portiere"]] + s["undici"]:
+    if s["portiere"] is None:
+        out.append("⚠️ <b>Nessun portiere in campo questa giornata</b>: "
+                   "controlla se una delle loro partite e' stata rinviata.")
+    for v in ([s["portiere"]] if s["portiere"] else []) + s["undici"]:
         out += [f"<b>{v['g'][1]}</b> ({v['g'][0]}, {v['g'][2]}) — {v['val']:.2f}",
                 f"  {formazione.motivazione(v)}"]
     out += ["", "<b>PANCHINA</b> (ordine di subentro)"]
@@ -143,7 +149,8 @@ def messaggio_correzione(r, prima: list[str], club: list[str]) -> str:
         return testa + "\n\nNessun cambio: la formazione che ti ho mandato regge."
     out = [testa, "", f"Modulo: <b>{s['modulo']}</b> · {s['totale']:.1f} punti attesi", ""]
     for n in entrati:
-        v = next(v for v in [s["portiere"]] + s["undici"] if v["g"][1] == n)
+        candidati = ([s["portiere"]] if s["portiere"] else []) + s["undici"]
+        v = next(x for x in candidati if x["g"][1] == n)
         out += [f"🟢 <b>DENTRO {n}</b> ({v['g'][0]}, {v['g'][2]})",
                 f"  {formazione.motivazione(v)}"]
     for n in usciti:
