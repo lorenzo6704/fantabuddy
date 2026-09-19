@@ -76,7 +76,17 @@ def motivazione(v: dict) -> str:
         else:
             pezzi.append(fonte)
     dove = "in casa" if d["casa"] else "in trasferta"
-    pezzi.append(f"{dove} contro {v['avv']}")
+    att, dif = d.get("avv_attacco", 1.0), d.get("avv_difesa", 1.0)
+    if ruolo == "P":
+        forza = ("che segna molto" if att >= 1.20 else
+                 "che segna poco" if att <= 0.80 else "di rendimento medio")
+        sub = d.get("subiti_attesi")
+        pezzi.append(f"{dove} contro {v['avv']} {forza}" +
+                     (f", {sub:.2f} gol attesi da subire" if sub else ""))
+    else:
+        forza = ("difesa che concede molto" if dif >= 1.20 else
+                 "difesa solida" if dif <= 0.80 else "difesa nella media")
+        pezzi.append(f"{dove} contro {v['avv']}, {forza}")
     t = "; ".join(pezzi)
     return t[0].upper() + t[1:] + "."
 
