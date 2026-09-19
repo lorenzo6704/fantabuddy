@@ -15,6 +15,7 @@ Restituisce media e varianza: la varianza serve perche' la lega paga a soglie
 di gol, e li' la volatilita' e' un fattore, non un dettaglio.
 """
 from __future__ import annotations
+import math
 import rosa
 
 VOTO_BASE = 6.0
@@ -66,6 +67,10 @@ def fantavoto_atteso(g, prob_tit: float, casa: bool, stat: dict | None = None,
     voto = VOTO_BASE
     fonte = "stima iniziale"
 
+    gialli_suoi = None
+    if stat and stat["presenze"] >= 3:
+        gialli_suoi = _fondi(GIALLI_90[ruolo], stat["ammonizioni"] / stat["presenze"],
+                             stat["presenze"])
     if stat and stat["presenze"] > 0:
         n = stat["presenze"]
         voto = _fondi(VOTO_BASE, stat["media_voto"], n)
@@ -83,16 +88,29 @@ def fantavoto_atteso(g, prob_tit: float, casa: bool, stat: dict | None = None,
             # il dato personale conta, ma non sostituisce chi hai di fronte
             subiti = _fondi(subiti, stat["gol_subiti"] / stat["presenze"],
                             min(stat["presenze"], 4))
-        pi = max(0.0, 0.42 - 0.20 * subiti)
+        # Probabilita' di porta inviolata: P(zero gol) con distribuzione di
+        # Poisson, che e' la forma giusta per un conteggio di eventi rari.
+        pi = math.exp(-subiti)
         bonus = rosa.GOL_SUBITO * subiti + rosa.PORTA_INVIOLATA * pi
         var_bonus = subiti * 1.0 + pi * (1 - pi) * rosa.PORTA_INVIOLATA ** 2
         quota_rig = 0.0
     else:
         quota_rig = QUOTA_RIGORISTA.get(rig, 0.0)
+        # I rigori gia' calciati valgono piu' di quello che ho scritto in
+        # rosa.py: se uno ne ha tirati due, il rigorista e' lui, punto.
+        if stat:
+            calciati = stat["rigori_segnati"] + stat["rigori_sbagliati"]
+            if calciati >= 2:
+                quota_rig = max(quota_rig, 0.85)
+            elif calciati == 1:
+                quota_rig = max(quota_rig, 0.50)
         rig_attesi = RIGORI_A_PARTITA * quota_rig
         lam_gol = gol90 * quota_min * campo + rig_attesi * REALIZZAZIONE_RIGORI
         lam_ass = ass90 * quota_min * campo
-        p_giallo = GIALLI_90[ruolo] * quota_min
+        # se il giocatore ha uno storico, usiamo il suo: ci sono difensori da
+        # mezzo cartellino a partita e centrocampisti che non ne prendono mai
+        base_giallo = gialli_suoi if gialli_suoi is not None else GIALLI_90[ruolo]
+        p_giallo = min(0.9, base_giallo * quota_min)
         bonus = (lam_gol * rosa.GOL[ruolo] + lam_ass * rosa.ASSIST
                  + rig_attesi * (1 - REALIZZAZIONE_RIGORI) * rosa.RIGORE_SBAGLIATO
                  + p_giallo * rosa.AMMONIZIONE)
@@ -109,6 +127,6 @@ def fantavoto_atteso(g, prob_tit: float, casa: bool, stat: dict | None = None,
         "prob": prob_tit, "p_voto": p_voto, "minuti": quota_min, "bonus": bonus,
         "quota_rig": quota_rig, "gol90": gol90, "ass90": ass90, "casa": casa,
         "voto": voto, "fonte_rend": fonte, "varianza": varianza, "stato": stato,
-        "avv_attacco": avv["attacco"], "avv_difesa": avv["difesa"],
+        "avv_attacco": avv["attacco"], "avv_difesa": avv["difesa"], "club": club,
         "subiti_attesi": subiti if ruolo == "P" else None,
     }
