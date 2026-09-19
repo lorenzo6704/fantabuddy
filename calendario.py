@@ -43,9 +43,6 @@ TEAM_MODULO = re.compile(r"\b(" + "|".join(SQUADRE) + r")\s+(\d-\d-\d(?:-\d)?)\b
 # tentativo di indovinarlo ha sbagliato. Si chiede al calendario, che lo sa.
 # Se non e' disponibile, il messaggio usa la data del turno: piu' lunga da
 # leggere ma impossibile da sbagliare.
-_memo_numero: dict[str, int | None] = {}
-
-
 def ora_italiana(quando: dt.datetime) -> dt.datetime:
     return quando.astimezone(ROMA)
 
@@ -55,23 +52,6 @@ def _anno(mese: int, oggi: dt.date | None = None) -> int:
     oggi = oggi or dt.date.today()
     inizio = oggi.year if oggi.month >= 7 else oggi.year - 1
     return inizio if mese >= 7 else inizio + 1
-
-
-def numero_da_calendario(apertura: dt.datetime) -> int | None:
-    """Il numero di giornata del turno che si apre in quella data."""
-    chiave = apertura.date().isoformat()
-    if chiave in _memo_numero:
-        return _memo_numero[chiave]
-    numero = None
-    try:
-        for p in _partite_football_data():
-            if p["inizio"].astimezone(ROMA).date() == apertura.astimezone(ROMA).date():
-                numero = p["giornata"]
-                break
-    except Exception:
-        numero = None
-    _memo_numero[chiave] = numero
-    return numero
 
 
 def testo_probabili(timeout: int = 25) -> str:
@@ -165,8 +145,6 @@ def turno(pagina: str | None = None, adesso: dt.datetime | None = None):
     partite.sort(key=lambda p: p["inizio"])
     for p in partite:
         p.setdefault("fonte", fonte)
-    if giornata is None:
-        giornata = numero_da_calendario(partite[0]["inizio"])
     return {"giornata": giornata, "partite": partite, "fonte": fonte,
             "apertura": partite[0]["inizio"],
             "fine": partite[-1]["inizio"] + CODA_TURNO}
