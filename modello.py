@@ -48,11 +48,21 @@ def _fondi(iniziale: float, osservato: float, presenze: int) -> float:
 
 
 def fantavoto_atteso(g, prob_tit: float, casa: bool, stat: dict | None = None,
-                     stato: str = ""):
-    """Ritorna (media, dettagli). In dettagli c'e' anche `varianza`."""
+                     stato: str = "", mia: dict | None = None,
+                     avv: dict | None = None):
+    """Ritorna (media, dettagli). In dettagli c'e' anche `varianza`.
+
+    `mia` e `avv` sono attacco e difesa dei due club (1.0 = media di lega).
+    Contano molto: per un portiere l'avversario e' il fattore principale, e per
+    un attaccante una difesa che concede vale piu' di qualunque forma.
+    """
     ruolo, nome, club, rig, gol90, ass90 = g
     p_voto, quota_min = probabilita_voto(prob_tit, stato)
-    campo = 1.08 if casa else 0.93
+    mia = mia or {"attacco": 1.0, "difesa": 1.0}
+    avv = avv or {"attacco": 1.0, "difesa": 1.0}
+    # una difesa avversaria che concede il 20% in piu' della media vale un 20%
+    # di occasioni in piu'; il fattore campo si somma a questo
+    campo = (1.08 if casa else 0.93) * max(0.65, min(1.45, avv["difesa"]))
     voto = VOTO_BASE
     fonte = "stima iniziale"
 
@@ -65,9 +75,14 @@ def fantavoto_atteso(g, prob_tit: float, casa: bool, stat: dict | None = None,
                  f"media voto {stat['media_voto']:.2f}")
 
     if ruolo == "P":
-        subiti = GOL_SUBITI_ATTESI * (0.92 if casa else 1.08)
+        # gol attesi = quanto subisce la mia squadra x quanto segna l'avversaria
+        subiti = (GOL_SUBITI_ATTESI * mia["difesa"] * avv["attacco"]
+                  * (0.92 if casa else 1.08))
+        subiti = max(0.35, min(3.2, subiti))
         if stat and stat["presenze"] > 0:
-            subiti = _fondi(subiti, stat["gol_subiti"] / stat["presenze"], stat["presenze"])
+            # il dato personale conta, ma non sostituisce chi hai di fronte
+            subiti = _fondi(subiti, stat["gol_subiti"] / stat["presenze"],
+                            min(stat["presenze"], 4))
         pi = max(0.0, 0.42 - 0.20 * subiti)
         bonus = rosa.GOL_SUBITO * subiti + rosa.PORTA_INVIOLATA * pi
         var_bonus = subiti * 1.0 + pi * (1 - pi) * rosa.PORTA_INVIOLATA ** 2
@@ -94,4 +109,6 @@ def fantavoto_atteso(g, prob_tit: float, casa: bool, stat: dict | None = None,
         "prob": prob_tit, "p_voto": p_voto, "minuti": quota_min, "bonus": bonus,
         "quota_rig": quota_rig, "gol90": gol90, "ass90": ass90, "casa": casa,
         "voto": voto, "fonte_rend": fonte, "varianza": varianza, "stato": stato,
+        "avv_attacco": avv["attacco"], "avv_difesa": avv["difesa"],
+        "subiti_attesi": subiti if ruolo == "P" else None,
     }
