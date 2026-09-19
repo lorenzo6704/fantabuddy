@@ -42,16 +42,29 @@ GIOCATORI = [
 ]
 
 # ---------------------------------------------------------------- regolamento
-# VERIFICA questi valori sul regolamento della TUA lega. Il Fantacalcio Classic
-# ufficiale da' +3 al gol per qualunque ruolo; molte leghe casalinghe invece
-# differenziano (3 attaccante / 3,5 centrocampista / 4 difensore) e la scelta
-# cambia le formazioni.
-GOL = {"P": 3.0, "D": 3.0, "C": 3.0, "A": 3.0}
-ASSIST = 1.0
-AMMONIZIONE = -0.5
+# Valori della TUA lega, presi dal pannello punteggi.
+GOL = {"P": 3.0, "D": 3.0, "C": 3.0, "A": 3.0}   # il gol vale 3 per tutti i ruoli
+RIGORE_SEGNATO = 3.0
 RIGORE_SBAGLIATO = -3.0
+RIGORE_PARATO = 3.0
+ASSIST = 1.0
+AUTOGOL = -2.0
+AMMONIZIONE = -0.5
+ESPULSIONE = -1.0
 PORTA_INVIOLATA = 1.0
 GOL_SUBITO = -1.0
+GOL_VITTORIA = 0.0
+GOL_PAREGGIO = 0.0
+PLAYER_OF_THE_MATCH = 0.0
+
+# Soglie gol: con almeno N punti di squadra si segnano M gol.
+SOGLIE = [66, 71, 76, 80, 84, 88]
+PASSO_OLTRE = 4          # poi un gol ogni 4 punti
+
+# Con 15 minuti giocati il voto si prende comunque: la probabilita' delle
+# probabili formazioni misura la titolarita', non il voto. La conversione sta
+# in modello.probabilita_voto().
+SOGLIA_TITOLARE = 0.60
 
 MODULI = {
     "3-4-3": (3, 4, 3), "3-5-2": (3, 5, 2), "4-3-3": (4, 3, 3),
