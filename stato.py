@@ -28,10 +28,11 @@ def scrivi(d: dict):
     json.dump(d, open(FILE, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
-def allinea_giornata(d: dict, giornata: int) -> dict:
-    """Se siamo passati alla giornata successiva, le correzioni scadono."""
-    if d.get("giornata") != giornata:
-        d["giornata"] = giornata
+def allinea_giornata(d: dict, chiave) -> dict:
+    """La chiave e' la data di apertura del turno. Quando cambia turno, le
+    correzioni scadono da sole."""
+    if d.get("giornata") != chiave:
+        d["giornata"] = chiave
         d["correzioni"] = {}
         d["chiuso"] = False
     return d
