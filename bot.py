@@ -104,6 +104,17 @@ def calcola(correzioni: dict | None = None):
             "avvisi": avvisi, "prob_dati": prob_dati, "guasti": guasti}
 
 
+def chiave_turno(r) -> str:
+    """Identifica il turno dalla data della partita di apertura. Il numero di
+    giornata puo' mancare o essere letto male: la data no."""
+    return r["apertura"].astimezone(ROMA).date().isoformat()
+
+
+def etichetta_turno(r) -> str:
+    return (f"Giornata {r['giornata']}" if r.get("giornata")
+            else f"Turno del {data_it(r['apertura']).split(' alle ')[0]}")
+
+
 def undici_nomi(s) -> list[str]:
     nomi = [v["g"][1] for v in s["undici"]]
     if s["portiere"]:
@@ -114,9 +125,13 @@ def undici_nomi(s) -> list[str]:
 # ------------------------------------------------------------------ messaggi
 def messaggio_completo(r) -> str:
     s = r["scelta"]
-    out = [f"<b>Giornata {r['giornata']}</b> — primo match {data_it(r['apertura'])}",
+    out = [f"<b>{etichetta_turno(r)}</b> — primo match {data_it(r['apertura'])}",
            f"Modulo: <b>{s['modulo']}</b> · {s['totale']:.1f} punti attesi", "",
            "<b>FORMAZIONE</b>"]
+    if not s.get("completo", True):
+        out.append(f"⚠️ <b>Formazione incompleta</b>: mancano {s['mancano']} slot, "
+                   "in questo turno non hai abbastanza giocatori in campo. "
+                   "Completa con chi preferisci dalla panchina.")
     if s["portiere"] is None:
         out.append("⚠️ <b>Nessun portiere in campo questa giornata</b>: "
                    "controlla se una delle loro partite e' stata rinviata.")
@@ -171,32 +186,33 @@ def modo_pre(st, forza=False):
     r = calcola(st["correzioni"])
     if r is None:
         return print("nessuna giornata in programma")
-    st = stato.allinea_giornata(st, r["giornata"])
+    chiave = chiave_turno(r)
+    st = stato.allinea_giornata(st, chiave)
     adesso = dt.datetime.now(dt.timezone.utc)
 
     if turno_in_corso(r, adesso) and not forza:
-        return print(f"giornata {r['giornata']} in corso: la formazione e' bloccata, "
+        return print(f"{etichetta_turno(r)} in corso: la formazione e' bloccata, "
                      f"riprendo dopo {data_it(r['fine'])}")
 
     ore = (r["apertura"] - adesso).total_seconds() / 3600
-    if forza or (ore <= ORE_PRIMA and r["giornata"] not in st["inviate"]):
+    if forza or (ore <= ORE_PRIMA and chiave not in st["inviate"]):
         invia(messaggio_completo(r))
-        st["inviate"] = sorted(set(st["inviate"] + [r["giornata"]]))
+        st["inviate"] = sorted(set(st["inviate"] + [chiave]))[-8:]
         st["ultimo_undici"] = undici_nomi(r["scelta"])
         st["chiuso"] = False
         stato.scrivi(st)
-        print(f"inviata giornata {r['giornata']} ({ore:.1f} ore al via)")
-    elif r["giornata"] in st["inviate"]:
-        print(f"giornata {r['giornata']} gia' inviata")
+        print(f"inviato: {etichetta_turno(r)} ({ore:.1f} ore al via)")
+    elif chiave in st["inviate"]:
+        print(f"{etichetta_turno(r)} gia' inviata")
     else:
         print(f"troppo presto: mancano {ore:.1f} ore al primo match")
 
 
 def modo_ufficiali(st):
     r = calcola(st["correzioni"])
-    if r is None or r["giornata"] not in st.get("inviate", []):
-        return print("formazione non ancora inviata per questa giornata")
-    st = stato.allinea_giornata(st, r["giornata"])
+    if r is None or chiave_turno(r) not in st.get("inviate", []):
+        return print("formazione non ancora inviata per questo turno")
+    st = stato.allinea_giornata(st, chiave_turno(r))
     if st.get("chiuso"):
         return print("giornata gia' chiusa")
 
@@ -286,7 +302,7 @@ def modo_test():
         return print("nessuna giornata leggibile")
     invia("\u2699\ufe0f <b>MESSAGGIO DI PROVA</b> — non sostituisce quello "
           "ufficiale\n\n" + messaggio_completo(r))
-    print(f"prova inviata per la giornata {r['giornata']}")
+    print(f"prova inviata: {etichetta_turno(r)}")
 
 
 def main():
