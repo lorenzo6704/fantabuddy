@@ -4,6 +4,29 @@ import math
 import rosa, punteggio
 
 
+CORRELAZIONE_STESSO_CLUB = 0.25
+
+
+def _varianza_squadra(in_campo: list[dict]) -> float:
+    """Somma delle varianze, piu' la correlazione fra compagni di squadra.
+
+    Due giocatori dello stesso club vanno su e giu' insieme: se la loro
+    squadra prende tre gol, ne risentono entrambi. Ignorarlo fa sembrare la
+    formazione piu' stabile di quanto sia, e con le soglie a gol la stabilita'
+    e' proprio la cosa da stimare bene.
+    """
+    var = sum(v["det"].get("varianza", 1.0) for v in in_campo)
+    per_club: dict[str, list[float]] = {}
+    for v in in_campo:
+        per_club.setdefault(v["g"][2], []).append(
+            math.sqrt(max(0.0, v["det"].get("varianza", 1.0))))
+    for sd in per_club.values():
+        for i in range(len(sd)):
+            for j in range(i + 1, len(sd)):
+                var += 2 * CORRELAZIONE_STESSO_CLUB * sd[i] * sd[j]
+    return var
+
+
 def scegli(valutati: list[dict]) -> dict:
     per_ruolo = {r: sorted([v for v in valutati if v["g"][0] == r],
                            key=lambda v: -v["val"]) for r in "PDCA"}
@@ -20,7 +43,7 @@ def scegli(valutati: list[dict]) -> dict:
         # meglio dare la formazione migliore possibile e dire che e' incompleta.
         in_campo = ([portiere] if portiere else []) + undici
         tot = sum(v["val"] for v in in_campo)
-        var = sum(v["det"].get("varianza", 1.0) for v in in_campo)
+        var = _varianza_squadra(in_campo)
         sd = math.sqrt(var)
         # La lega paga a soglie di gol, non a punti: scegliamo il modulo che
         # massimizza i GOL attesi, che tiene conto anche della volatilita'.
