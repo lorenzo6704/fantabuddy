@@ -1,10 +1,24 @@
 {
  "offset": 0,
- "giornata": null,
+ "giornata": "2026-09-18",
  "correzioni": {},
- "inviate": [],
- "ultimo_undici": [],
- "chiuso": false,
+ "inviate": [
+  "2026-09-18"
+ ],
+ "ultimo_undici": [
+  "Davis",
+  "De Bruyne",
+  "De Gea",
+  "Esposito Se.",
+  "Estupinan",
+  "Goncalves",
+  "Mancini",
+  "Pulisic",
+  "Theate",
+  "Toure",
+  "Zaniolo"
+ ],
+ "chiuso": true,
  "numero_giornata": 5,
  "numero_riferito_a": "2026-09-18"
 }
