@@ -124,3 +124,40 @@ def forza(f: dict, club: str) -> dict:
     return {"attacco": 1.0, "difesa": 1.0,
             "fatti_pg": f.get("_media", {}).get("gol_pg", 1.35),
             "subiti_pg": f.get("_media", {}).get("subiti_pg", 1.35)}
+
+
+def giornate_giocate(dati: dict) -> int:
+    """Quante giornate si sono gia' disputate.
+
+    Chi ha giocato tutte le partite ha presenze pari alle giornate: su
+    quattrocento calciatori qualcuno c'e' sempre. E' piu' affidabile che
+    cercare il numero nel titolo di una pagina web.
+    """
+    return max((v["presenze"] for v in dati.values()), default=0)
+
+
+def rigoristi_osservati(dati: dict, minimo: int = 2) -> dict[str, str]:
+    """Chi ha davvero calciato i rigori, club per club.
+
+    Le gerarchie dichiarate a inizio stagione cambiano senza preavviso: qui
+    contano i rigori effettivamente battuti. Serve almeno `minimo` rigori per
+    considerarlo un segnale e non un episodio.
+    """
+    per_club: dict[str, list] = {}
+    for v in dati.values():
+        calciati = v["rigori_segnati"] + v["rigori_sbagliati"]
+        if calciati:
+            per_club.setdefault(v["club"], []).append((calciati, v["nome"]))
+    fuori = {}
+    for club, elenco in per_club.items():
+        elenco.sort(reverse=True)
+        if elenco[0][0] >= minimo:
+            fuori[club] = elenco[0][1]
+    return fuori
+
+
+def cartellini90(v: dict | None) -> float | None:
+    """Ammonizioni per partita di quel giocatore, se ha abbastanza presenze."""
+    if not v or v["presenze"] < 3:
+        return None
+    return v["ammonizioni"] / v["presenze"]
