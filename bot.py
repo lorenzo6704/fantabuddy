@@ -78,7 +78,7 @@ def calcola(correzioni: dict | None = None):
         giocate = voti.giornate_giocate(stat_dati)
     except Exception as e:
         stat_dati, forze, rig_veri, giocate = {}, {}, {}, 0
-        guasti.append(f"statistiche non raggiungibili ({type(e).__name__})")
+        guasti.append(f"statistiche non raggiungibili ({type(e).__name__}: {e})")
 
     valutati, avvisi = [], []
     for g in rosa.GIOCATORI:
@@ -262,9 +262,46 @@ def modo_ufficiali(st):
     print("correzione inviata per: " + ", ".join(pronti))
 
 
+RICHIESTE = {
+    "calendario": ["turno", "avversario", "radiografia", "ora_italiana"],
+    "probabili": ["testo_pagina", "analizza", "cerca", "formazione_ufficiale"],
+    "voti": ["scarica", "analizza", "cerca", "forza_squadre", "forza"],
+    "modello": ["fantavoto_atteso", "probabilita_voto"],
+    "formazione": ["scegli", "motivazione", "perche_fuori"],
+    "punteggio": ["gol_attesi", "dettaglio", "soglie"],
+    "stato": ["leggi", "scrivi", "allinea_giornata", "numero_giornata"],
+    "rosa": ["GIOCATORI", "MODULI", "SOGLIE", "SOGLIA_TITOLARE"],
+}
+
+
+def controlla_versioni() -> list[str]:
+    """Verifica che ogni file abbia le funzioni che gli altri gli chiedono.
+
+    Serve perche' l'errore tipico non e' un bug ma un file rimasto indietro:
+    il bot continua a girare e ripiega in silenzio sulle stime, che e' molto
+    peggio di fermarsi.
+    """
+    import importlib
+    mancanti = []
+    for modulo, nomi in RICHIESTE.items():
+        try:
+            m = importlib.import_module(modulo)
+        except Exception as e:
+            mancanti.append(f"{modulo}.py non si carica ({e})")
+            continue
+        for n in nomi:
+            if not hasattr(m, n):
+                mancanti.append(f"{modulo}.py non ha {n} — file vecchio, sostituiscilo")
+    return mancanti
+
+
 def diagnosi():
     esiti = []
     st_diag = stato.leggi()
+    disallineati = controlla_versioni()
+    esiti.append(("Versione dei file",
+                  "tutti allineati" if not disallineati else " | ".join(disallineati),
+                  bool(disallineati)))
     for v in ("TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID"):
         ok = bool(os.environ.get(v))
         esiti.append((v, "presente" if ok else "MANCANTE", not ok))
