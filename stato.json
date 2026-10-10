@@ -1,10 +1,24 @@
 {
  "offset": 0,
- "giornata": null,
+ "giornata": "2026-10-10",
  "correzioni": {},
- "inviate": [],
- "ultimo_undici": [],
+ "inviate": [
+  "2026-10-10"
+ ],
+ "ultimo_undici": [
+  "Bakola",
+  "Bartesaghi",
+  "Davis",
+  "De Bruyne",
+  "Dovbyk",
+  "Esposito Se.",
+  "Goncalves",
+  "Mancini",
+  "Palmisani",
+  "Pulisic",
+  "Rrahmani"
+ ],
  "chiuso": false,
- "numero_giornata": 5,
- "numero_riferito_a": "2026-09-18"
+ "numero_giornata": 6,
+ "numero_riferito_a": "2026-10-10"
 }
