@@ -19,7 +19,7 @@
   "Theate",
   "Toure"
  ],
- "chiuso": false,
+ "chiuso": true,
  "numero_giornata": 7,
  "numero_riferito_a": "2026-10-16"
 }
