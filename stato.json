@@ -1,27 +1,28 @@
 {
  "offset": 0,
- "giornata": "2026-10-27",
+ "giornata": "2026-10-31",
  "correzioni": {},
  "inviate": [
   "2026-10-10",
   "2026-10-16",
   "2026-10-23",
-  "2026-10-27"
+  "2026-10-27",
+  "2026-10-31"
  ],
  "ultimo_undici": [
-  "Bartesaghi",
+  "Bakola",
+  "Baldanzi",
   "Davis",
   "De Bruyne",
   "Dovbyk",
   "Esposito Se.",
+  "Ghilardi",
   "Mancini",
   "Palmisani",
-  "Piotrowski",
   "Pulisic",
-  "Rrahmani",
-  "Zaniolo"
+  "Rrahmani"
  ],
- "chiuso": true,
- "numero_giornata": 9,
- "numero_riferito_a": "2026-10-27"
+ "chiuso": false,
+ "numero_giornata": 10,
+ "numero_riferito_a": "2026-10-31"
 }
