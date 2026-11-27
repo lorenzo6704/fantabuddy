@@ -1,6 +1,6 @@
 {
  "offset": 0,
- "giornata": "2026-11-21",
+ "giornata": "2026-11-27",
  "correzioni": {},
  "inviate": [
   "2026-10-10",
@@ -9,22 +9,23 @@
   "2026-10-27",
   "2026-10-31",
   "2026-11-06",
-  "2026-11-21"
+  "2026-11-21",
+  "2026-11-27"
  ],
  "ultimo_undici": [
-  "Bakola",
-  "Colombo",
-  "De Bruyne",
+  "Dovbyk",
   "Esposito Se.",
   "Goncalves",
   "Mancini",
   "Palmisani",
+  "Pessina",
   "Pulisic",
   "Rrahmani",
   "Theate",
-  "Toure"
+  "Toure",
+  "Zaniolo"
  ],
- "chiuso": true,
- "numero_giornata": 12,
- "numero_riferito_a": "2026-11-21"
+ "chiuso": false,
+ "numero_giornata": 13,
+ "numero_riferito_a": "2026-11-27"
 }
